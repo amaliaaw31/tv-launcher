@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="420dp"
+    android:layout_height="wrap_content"
+    android:background="@drawable/popup_card"
+    android:focusable="true"
+    android:orientation="vertical"
+    android:padding="17dp">
+
+    <TextView
+        android:id="@+id/popupTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/quake_warning_title"
+        android:textColor="#FFD54F"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/popupMain"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/popupSub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:textColor="#ECEFF1"
+        android:textSize="13sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="9dp"
+        android:text="@string/dismiss_hint"
+        android:textColor="#B0BEC5"
+        android:textSize="11sp" />
+</LinearLayout>

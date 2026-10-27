@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#B00020"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="48dp">
+
+    <TextView
+        android:id="@+id/alertTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/quake_big_title"
+        android:textColor="#FFFFFF"
+        android:textSize="42sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/alertMag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:textColor="#FFEB3B"
+        android:textSize="92sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/alertMain"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
+        android:textSize="27sp" />
+
+    <TextView
+        android:id="@+id/alertSub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:textColor="#FFCDD2"
+        android:textSize="19sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="38dp"
+        android:background="#7F0000"
+        android:padding="18dp"
+        android:text="@string/drop_cover_hold"
+        android:textColor="#FFFFFF"
+        android:textSize="30sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="26dp"
+        android:text="@string/dismiss_hint"
+        android:textColor="#FFCDD2"
+        android:textSize="16sp" />
+</LinearLayout>

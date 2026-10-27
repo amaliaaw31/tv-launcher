@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two-pane settings modeled on the user's mockup: category list on the
+     left, the selected category's rows on the right.
+     v1.8: the flat gradient backdrop is gone — the background is the
+     actual current wallpaper photo (same city + weather/night scene the
+     home screen picked, handed over via Prefs.lastSceneName) under a
+     dark scrim, with dark smoky glass panes/cards/rows on top. The rows
+     ScrollView wraps its content (fillViewport off) so rows keep their
+     natural height, top-aligned, instead of stretching down the pane. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <ImageView
+        android:id="@+id/settingsWallpaper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop"
+        android:src="@drawable/jakarta_cerah" />
+
+    <!-- dark scrim over the photo so glass panels and text stay readable -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#59000000" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:padding="27dp">
+
+        <!-- left pane: header card + categories -->
+        <LinearLayout
+            android:layout_width="288dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/set_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="14dp">
+
+                <FrameLayout
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:background="@drawable/header_chip">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_gear" />
+                </FrameLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="@string/settings_header"
+                    android:textColor="#FFFFFF"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/categoryList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="vertical" />
+        </LinearLayout>
+
+        <!-- right pane: title + rows of the selected category -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="22dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/categoryTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="12dp"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fillViewport="false"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/rowsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top"
+                    android:orientation="vertical" />
+            </ScrollView>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
