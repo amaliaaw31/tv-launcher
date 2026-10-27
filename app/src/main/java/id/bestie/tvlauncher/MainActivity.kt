@@ -1,5 +1,6 @@
 package id.bestie.tvlauncher
 
+import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ResolveInfo
@@ -14,6 +15,7 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONObject
@@ -209,8 +211,8 @@ class MainActivity : LocalizedActivity() {
         gearBtn.setColorFilter(Color.WHITE)
 
         // Card actions (point 4): OK refetches ONLY that card's source;
-        // OK on the quake card opens the detail page (point 3). Focus
-        // swaps the card background to the teal-bordered variant.
+        // OK on the quake card opens the native detail dialog (point 2).
+        // Focus swaps the card background to the teal-bordered variant.
         weatherCard.setOnClickListener {
             val city = Prefs.city(this)
             executor.execute { fetchWeather(city) }
@@ -221,7 +223,7 @@ class MainActivity : LocalizedActivity() {
             executor.execute { fetchPrayer(city) }
         }
         quakeCard.setOnClickListener {
-            startActivity(Intent(this, QuakeDetailActivity::class.java))
+            showQuakeDetailDialog()
         }
         volcanoCard.setOnClickListener {
             executor.execute { fetchVolcano() }
@@ -257,7 +259,7 @@ class MainActivity : LocalizedActivity() {
             uiHandler.removeCallbacks(refreshRunnable)
             uiHandler.post(refreshRunnable)
         }
-        // If the detail page refetched a newer quake while we were away,
+        // If a newer quake record was persisted while we were away,
         // adopt it as the card's last-good data.
         val persistedQuakeMs = Prefs.quakeUpdatedAt(this)
         if (persistedQuakeMs > quakeOkMs) {
@@ -784,7 +786,7 @@ class MainActivity : LocalizedActivity() {
             )
             chip.addView(TextView(this).apply {
                 text = dayLabel
-                textSize = 14f
+                textSize = 16f
                 setTextColor(Color.parseColor("#B0BEC5"))
                 gravity = android.view.Gravity.CENTER
                 maxLines = 1
@@ -801,7 +803,7 @@ class MainActivity : LocalizedActivity() {
                     Locale.US, "%d°/%d°",
                     Math.round(day.max), Math.round(day.min)
                 )
-                textSize = 14f
+                textSize = 16f
                 setTextColor(Color.WHITE)
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 gravity = android.view.Gravity.CENTER
@@ -1043,8 +1045,18 @@ class MainActivity : LocalizedActivity() {
         if (diff > 24 * 60) diff -= 24 * 60
         val en = Prefs.isEnglish(this)
         val remaining = if (en) "${diff / 60} h ${diff % 60} m" else "${diff / 60} j ${diff % 60} m"
+        // v2.0 (point 2): short next-prayer format ("Dzuhur 11:36 •
+        // 5 j 14 m") so the bold line renders on ONE line — the v1.9
+        // "Berikutnya: … • … lagi" wrapped and stranded "lagi".
         prayerNext.text = getString(R.string.next_prayer, nextName, nextTime, remaining)
-        prayerAll.text = entries.joinToString("  •  ") { "${it.first} ${it.second}" }
+        // All-times on TWO clear lines (Subuh • Dzuhur / Ashar •
+        // Maghrib • Isya) — no ellipsis truncation of any time.
+        prayerAll.text = if (entries.size >= 5) {
+            entries.take(2).joinToString(" • ") { "${it.first} ${it.second}" } +
+                "\n" + entries.drop(2).joinToString(" • ") { "${it.first} ${it.second}" }
+        } else {
+            entries.joinToString(" • ") { "${it.first} ${it.second}" }
+        }
     }
 
     // ---------------------------------------------------------------- quake
@@ -1054,7 +1066,7 @@ class MainActivity : LocalizedActivity() {
         val quake = json?.let { QuakeParser.parseLatest(it) }
         if (quake != null) {
             val now = System.currentTimeMillis()
-            // Point 3: persist the full record for the detail page.
+            // Persist the full record for the card + detail dialog.
             Prefs.saveQuake(
                 this, quake.magnitude, quake.wilayah, quake.tanggal, quake.jam,
                 quake.dateTime, quake.kedalaman, quake.koordinat, quake.dirasakan,
@@ -1080,17 +1092,93 @@ class MainActivity : LocalizedActivity() {
         }
     }
 
-    /** Renders the home quake summary (point 3) from the persisted record. */
+    /** Renders the home quake summary from the persisted record. */
     private fun renderQuakeCard() {
         if (Prefs.quakeUpdatedAt(this) == 0L) return
         quakeMain.text = getString(
             R.string.quake_summary,
-            OverlayPopup.formatMag(Prefs.quakeMag(this)), Prefs.quakeRegion(this)
+            OverlayPopup.formatMag(Prefs.quakeMag(this)), shortWilayah(Prefs.quakeRegion(this))
         )
         quakeSub.text = getString(
             R.string.quake_summary_sub,
             Prefs.quakeTanggal(this), Prefs.quakeJam(this), Prefs.quakeDepth(this)
         )
+    }
+
+    /**
+     * v2.0 (point 2): short location for the home card. BMKG Wilayah
+     * strings look like "Pusat gempa berada di darat 7 km barat daya
+     * Gunungkidul, DIY" — the card keeps only the place segment after
+     * the distance/direction boilerplate. Deterministic: strips the
+     * standard prefixes, then drops a leading "<n> km <direction>"
+     * part if present. Anything unrecognized falls back to the full
+     * Wilayah, trimmed and capitalized.
+     */
+    private fun shortWilayah(wilayah: String): String {
+        var s = wilayah.trim()
+        if (s.isEmpty()) return s
+        for (prefix in listOf(
+            "Pusat gempa berada di darat", "Pusat gempa berada di laut",
+            "Pusat gempa terletak di darat", "Pusat gempa terletak di laut"
+        )) {
+            if (s.startsWith(prefix, ignoreCase = true)) {
+                s = s.substring(prefix.length).trim()
+                break
+            }
+        }
+        // "7 km barat daya X" / "12 km tenggara X" -> "X"
+        val m = Regex("""^\d+(?:[.,]\d+)?\s*km\s+\S+(?:\s+\S+)?\s+""", RegexOption.IGNORE_CASE).find(s)
+        if (m != null) {
+            val rest = s.substring(m.range.last + 1).trim()
+            if (rest.isNotEmpty()) s = rest
+        }
+        return s.replaceFirstChar { it.uppercase() }
+    }
+
+    /**
+     * v2.0 (point 2): complete quake detail in a native AlertDialog
+     * (replaces the v1.9 QuakeDetailActivity). Body = ScrollView +
+     * TextView with the COMPLETE unabridged record; D-pad scrolls it;
+     * Back or Tutup dismisses and focus returns to the quake card.
+     */
+    private fun showQuakeDetailDialog() {
+        if (Prefs.quakeUpdatedAt(this) == 0L) return
+        fun field(labelRes: Int, value: String): String =
+            getString(labelRes) + ": " + value.ifBlank { "—" }
+        val tanggal = Prefs.quakeTanggal(this)
+        val jam = Prefs.quakeJam(this)
+        val timeText = listOf(tanggal, jam).filter { it.isNotBlank() }
+            .joinToString(" • ").ifBlank { Prefs.quakeDateTime(this) }
+        val body = listOf(
+            field(R.string.quake_mag_label, "M " + OverlayPopup.formatMag(Prefs.quakeMag(this))),
+            field(R.string.quake_region_label, Prefs.quakeRegion(this)),
+            field(R.string.quake_time_label, timeText),
+            field(R.string.quake_depth_label, Prefs.quakeDepth(this)),
+            field(R.string.quake_coords_label, Prefs.quakeCoords(this)),
+            field(R.string.quake_felt_label, Prefs.quakeFelt(this)),
+            field(R.string.quake_tsunami_label, Prefs.quakePotensi(this)),
+            getString(R.string.quake_source, hhmm(Prefs.quakeUpdatedAt(this)))
+        ).joinToString("\n")
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val textView = TextView(this).apply {
+            text = body
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            setPadding(pad, pad / 2, pad, pad / 2)
+            isFocusable = true
+        }
+        val scroll = ScrollView(this).apply {
+            addView(textView)
+            isFocusable = true
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.quake_detail_title)
+            .setView(scroll)
+            .setPositiveButton(R.string.close, null)
+            .create()
+        dialog.setOnDismissListener { quakeCard.requestFocus() }
+        dialog.setOnShowListener { scroll.requestFocus() }
+        dialog.show()
     }
 
     // -------------------------------------------------------------- volcano

@@ -113,9 +113,11 @@
                 android:orientation="vertical"
                 android:paddingTop="68dp">
 
-                <!-- weather card (v1.9): bigger text, less clutter —
-                     title, main line, city, ONE AQI line, status line.
-                     Focusable: OK refetches weather + air only. -->
+                <!-- weather card: title, main line, city, ONE AQI
+                     line, status line. Height wraps content like every
+                     card (v2.0 point 1) — no fixed/min height anywhere
+                     in this column. Focusable: OK refetches weather +
+                     air only. -->
                 <LinearLayout
                     android:id="@+id/weatherCard"
                     android:layout_width="match_parent"
@@ -167,7 +169,7 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
-                        android:textSize="14sp" />
+                        android:textSize="16sp" />
                 </LinearLayout>
 
                 <!-- prayer card (v1.9): next-prayer line + one all-times
@@ -205,8 +207,7 @@
                         android:id="@+id/prayerAll"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:maxLines="1"
+                        android:maxLines="2"
                         android:textColor="#ECEFF1"
                         android:textSize="16sp" />
 
@@ -217,12 +218,12 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
-                        android:textSize="14sp" />
+                        android:textSize="16sp" />
                 </LinearLayout>
 
-                <!-- quake card (v1.9, point 3): readable summary only;
-                     full detail opens in QuakeDetailActivity on OK.
-                     Focusable. -->
+                <!-- quake card: readable summary only (short place
+                     name, v2.0 point 2); OK opens the COMPLETE detail
+                     in a native AlertDialog. Focusable. -->
                 <LinearLayout
                     android:id="@+id/quakeCard"
                     android:layout_width="match_parent"
@@ -270,7 +271,7 @@
                         android:layout_marginTop="2dp"
                         android:text="@string/quake_detail_hint"
                         android:textColor="#22D3EE"
-                        android:textSize="14sp" />
+                        android:textSize="16sp" />
 
                     <TextView
                         android:id="@+id/quakeStatus"
@@ -279,7 +280,7 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
-                        android:textSize="14sp" />
+                        android:textSize="16sp" />
                 </LinearLayout>
 
                 <!-- volcano strip (v1.9): title + name/level line (15sp)
@@ -329,7 +330,7 @@
                         android:layout_marginTop="4dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
-                        android:textSize="14sp" />
+                        android:textSize="16sp" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

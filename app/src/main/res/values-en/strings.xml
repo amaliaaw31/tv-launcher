@@ -12,7 +12,7 @@
     <string name="loading">Loading…</string>
     <string name="no_data">Data unavailable</string>
     <string name="prayer_title">Prayer Times</string>
-    <string name="next_prayer">Next: %1$s %2$s • in %3$s</string>
+    <string name="next_prayer">%1$s %2$s • %3$s</string>
     <string name="quake_title">Latest BMKG Earthquake</string>
     <string name="quake_line">M %1$s • %2$s</string>
     <string name="quake_depth">Depth %1$s • %2$s</string>
@@ -73,6 +73,8 @@
     <string name="data_failed">Could not load data</string>
     <string name="retry">Retry</string>
     <string name="quake_detail_title">Earthquake Detail</string>
+    <string name="close">Close</string>
+    <string name="quake_mag_label">Magnitude</string>
     <string name="quake_region_label">Region</string>
     <string name="quake_time_label">Time</string>
     <string name="quake_depth_label">Depth</string>

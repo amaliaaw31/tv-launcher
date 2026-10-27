@@ -137,9 +137,9 @@ object Prefs {
         sp(ctx).getString(KEY_LAST_LAUNCHED_PKG, "") ?: ""
 
     /**
-     * Full record of the last successfully fetched BMKG quake (point 3),
-     * read by QuakeDetailActivity and used to keep the home card's last
-     * good data on screen when a later fetch fails (point 4).
+     * Full record of the last successfully fetched BMKG quake,
+     * read by the home card + detail dialog and used to keep the
+     * card's last good data on screen when a later fetch fails.
      */
     fun saveQuake(
         ctx: Context, mag: Double, region: String, tanggal: String, jam: String,

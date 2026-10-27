@@ -12,7 +12,7 @@
     <string name="loading">Memuat…</string>
     <string name="no_data">Data tidak tersedia</string>
     <string name="prayer_title">Jadwal Sholat</string>
-    <string name="next_prayer">Berikutnya: %1$s %2$s • %3$s lagi</string>
+    <string name="next_prayer">%1$s %2$s • %3$s</string>
     <string name="quake_title">Gempa Terakhir BMKG</string>
     <string name="quake_line">M %1$s • %2$s</string>
     <string name="quake_depth">Kedalaman %1$s • %2$s</string>
@@ -73,6 +73,8 @@
     <string name="data_failed">Gagal memuat data</string>
     <string name="retry">Coba Lagi</string>
     <string name="quake_detail_title">Detail Gempa</string>
+    <string name="close">Tutup</string>
+    <string name="quake_mag_label">Magnitudo</string>
     <string name="quake_region_label">Wilayah</string>
     <string name="quake_time_label">Waktu</string>
     <string name="quake_depth_label">Kedalaman</string>

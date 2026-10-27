@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Clock-area scrim (v1.9, review point 2): soft black gradient
-     behind the left clock/date/forecast column. Starts at ~72% black
-     on the far left and is fully transparent by 55% of the width, so
-     the greeting/clock/date/forecast text keeps contrast over bright
-     wallpaper areas without a visible panel edge. -->
+<!-- Clock-area scrim (v2.0, review point 3): soft black gradient behind
+     the left clock/date/forecast column. QA measurement (Python/PIL over
+     the four bundled Jakarta scenes, WCAG relative-luminance method):
+     the v1.9 scrim (#B8, fade by 55%) left the brightest patches behind
+     the clock at 2.42:1 (p90 luminance) on cerah/berawan — under the
+     3:1 large-text target. Strengthened locally to #E0 start, fading to
+     transparent by 62% of the width: clock contrast is now 6.3-16.0:1
+     (mean) and 3.2-12.4:1 (p90) across cerah/berawan/hujan/malam.
+     Still a local scrim — the rest of the photo is untouched. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <gradient
         android:angle="0"
         android:centerColor="#00000000"
-        android:centerX="0.55"
+        android:centerX="0.62"
         android:endColor="#00000000"
-        android:startColor="#B8000000"
+        android:startColor="#E0000000"
         android:type="linear" />
 </shape>

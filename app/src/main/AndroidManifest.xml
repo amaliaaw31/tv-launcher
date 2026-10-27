@@ -17,6 +17,22 @@
         android:name="android.software.leanback"
         android:required="false" />
 
+    <!-- v2.0 (point 5): package visibility. Without <queries>, Android 14
+         filters queryIntentActivities to system/preinstalled apps, so
+         user-installed launchable apps never reached the dock. Declaring
+         the two MAIN intents makes every app carrying a phone-style or
+         TV-style launcher entry visible — no QUERY_ALL_PACKAGES needed. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:banner="@drawable/banner"
@@ -43,13 +59,6 @@
         // Opened only from the gear icon on the home screen; not a launcher entry.
         <activity
             android:name=".SettingsActivity"
-            android:configChanges="keyboardHidden|orientation|screenSize"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-
-        <!-- v1.9: full earthquake detail page, opened with OK on the home quake card. -->
-        <activity
-            android:name=".QuakeDetailActivity"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:exported="false"
             android:screenOrientation="landscape" />
