@@ -10,7 +10,9 @@ data class Quake(
     val tanggal: String,
     val dateTime: String,
     val potensi: String,
-    val dirasakan: String
+    val dirasakan: String,
+    /** BMKG "Coordinates" ("lat,lon"), falling back to Lintang/Bujur text. Used by the detail page (v1.9). */
+    val koordinat: String = ""
 ) {
     /** BMKG phrasing is e.g. "Berpotensi TSUNAMI" vs "tidak berpotensi TSUNAMI" — check the negation first. */
     val isTsunami: Boolean
@@ -49,7 +51,12 @@ object QuakeParser {
                 tanggal = obj.optString("Tanggal"),
                 dateTime = obj.optString("DateTime"),
                 potensi = obj.optString("Potensi"),
-                dirasakan = obj.optString("Dirasakan")
+                dirasakan = obj.optString("Dirasakan"),
+                koordinat = obj.optString("Coordinates").ifBlank {
+                    val lintang = obj.optString("Lintang")
+                    val bujur = obj.optString("Bujur")
+                    if (lintang.isBlank() && bujur.isBlank()) "" else "$lintang, $bujur"
+                }
             )
         } catch (e: Exception) {
             null

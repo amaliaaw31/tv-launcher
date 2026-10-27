@@ -40,9 +40,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Opened only from the gear icon on the home screen; not a launcher entry. -->
+        // Opened only from the gear icon on the home screen; not a launcher entry.
         <activity
             android:name=".SettingsActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <!-- v1.9: full earthquake detail page, opened with OK on the home quake card. -->
+        <activity
+            android:name=".QuakeDetailActivity"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:exported="false"
             android:screenOrientation="landscape" />

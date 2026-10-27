@@ -18,6 +18,15 @@
         android:layout_height="match_parent"
         android:background="#00000000" />
 
+    <!-- v1.9 (point 2): clock-area scrim — soft dark gradient behind the
+         left column, fading out by ~55% width, so clock/date/forecast
+         keep contrast over bright wallpaper areas. -->
+    <View
+        android:id="@+id/clockScrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/scrim_clock" />
+
     <!-- Content: main row (clock + widgets) above a fixed-height dock, so the
          widget column can never spill over the dock; excess is clipped inside
          the row instead. All sizes are the v1.4 ~0.75 scale of the original
@@ -104,23 +113,28 @@
                 android:orientation="vertical"
                 android:paddingTop="68dp">
 
+                <!-- weather card (v1.9): bigger text, less clutter —
+                     title, main line, city, ONE AQI line, status line.
+                     Focusable: OK refetches weather + air only. -->
                 <LinearLayout
+                    android:id="@+id/weatherCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="6dp"
                     android:background="@drawable/glass_card"
+                    android:focusable="true"
                     android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="8dp"
+                    android:paddingTop="10dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="8dp">
+                    android:paddingBottom="10dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/weather_title"
                         android:textColor="#B0BEC5"
-                        android:textSize="10sp" />
+                        android:textSize="15sp" />
 
                     <TextView
                         android:id="@+id/weatherMain"
@@ -128,7 +142,7 @@
                         android:layout_height="wrap_content"
                         android:text="@string/loading"
                         android:textColor="#FFFFFF"
-                        android:textSize="17sp"
+                        android:textSize="20sp"
                         android:textStyle="bold" />
 
                     <TextView
@@ -136,7 +150,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:textColor="#ECEFF1"
-                        android:textSize="11sp" />
+                        android:textSize="16sp" />
 
                     <TextView
                         android:id="@+id/weatherAqi"
@@ -144,26 +158,39 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:textColor="#FFD54F"
-                        android:textSize="11sp" />
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/weatherStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/loading"
+                        android:textColor="#B0BEC5"
+                        android:textSize="14sp" />
                 </LinearLayout>
 
+                <!-- prayer card (v1.9): next-prayer line + one all-times
+                     line + status line. Focusable: OK refetches prayer. -->
                 <LinearLayout
+                    android:id="@+id/prayerCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="6dp"
                     android:background="@drawable/glass_card"
+                    android:focusable="true"
                     android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="8dp"
+                    android:paddingTop="10dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="8dp">
+                    android:paddingBottom="10dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/prayer_title"
                         android:textColor="#B0BEC5"
-                        android:textSize="10sp" />
+                        android:textSize="15sp" />
 
                     <TextView
                         android:id="@+id/prayerNext"
@@ -171,7 +198,7 @@
                         android:layout_height="wrap_content"
                         android:text="@string/loading"
                         android:textColor="#FFFFFF"
-                        android:textSize="13sp"
+                        android:textSize="19sp"
                         android:textStyle="bold" />
 
                     <TextView
@@ -179,28 +206,42 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:ellipsize="end"
-                        android:maxLines="2"
+                        android:maxLines="1"
                         android:textColor="#ECEFF1"
-                        android:textSize="10sp" />
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/prayerStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/loading"
+                        android:textColor="#B0BEC5"
+                        android:textSize="14sp" />
                 </LinearLayout>
 
+                <!-- quake card (v1.9, point 3): readable summary only;
+                     full detail opens in QuakeDetailActivity on OK.
+                     Focusable. -->
                 <LinearLayout
+                    android:id="@+id/quakeCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="6dp"
                     android:background="@drawable/glass_card"
+                    android:focusable="true"
                     android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="8dp"
+                    android:paddingTop="10dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="8dp">
+                    android:paddingBottom="10dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/quake_title"
                         android:textColor="#B0BEC5"
-                        android:textSize="10sp" />
+                        android:textSize="15sp" />
 
                     <TextView
                         android:id="@+id/quakeMain"
@@ -210,7 +251,7 @@
                         android:maxLines="2"
                         android:text="@string/loading"
                         android:textColor="#FFFFFF"
-                        android:textSize="12sp"
+                        android:textSize="20sp"
                         android:textStyle="bold" />
 
                     <TextView
@@ -220,48 +261,75 @@
                         android:ellipsize="end"
                         android:maxLines="1"
                         android:textColor="#ECEFF1"
-                        android:textSize="10sp" />
+                        android:textSize="16sp" />
 
                     <TextView
-                        android:id="@+id/quakeFelt"
-                        android:layout_width="match_parent"
+                        android:id="@+id/quakeHint"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:textColor="#CFD8DC"
-                        android:textSize="10sp" />
+                        android:layout_marginTop="2dp"
+                        android:text="@string/quake_detail_hint"
+                        android:textColor="#22D3EE"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/quakeStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/loading"
+                        android:textColor="#B0BEC5"
+                        android:textSize="14sp" />
                 </LinearLayout>
 
-                <!-- volcano: compact single strip, name + color level on one line -->
+                <!-- volcano strip (v1.9): title + name/level line (15sp)
+                     + status line. Focusable: OK refetches volcano. -->
                 <LinearLayout
+                    android:id="@+id/volcanoCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@drawable/glass_card"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
+                    android:focusable="true"
+                    android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="8dp"
+                    android:paddingTop="10dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="8dp">
+                    android:paddingBottom="10dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="8dp"
+                            android:text="@string/volcano_title"
+                            android:textColor="#B0BEC5"
+                            android:textSize="15sp" />
+
+                        <TextView
+                            android:id="@+id/volcanoText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:text="@string/loading"
+                            android:textColor="#FFFFFF"
+                            android:textSize="15sp" />
+                    </LinearLayout>
 
                     <TextView
+                        android:id="@+id/volcanoStatus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginEnd="8dp"
-                        android:text="@string/volcano_title"
-                        android:textColor="#B0BEC5"
-                        android:textSize="10sp" />
-
-                    <TextView
-                        android:id="@+id/volcanoText"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:maxLines="1"
+                        android:layout_marginTop="4dp"
                         android:text="@string/loading"
-                        android:textColor="#FFFFFF"
-                        android:textSize="11sp" />
+                        android:textColor="#B0BEC5"
+                        android:textSize="14sp" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

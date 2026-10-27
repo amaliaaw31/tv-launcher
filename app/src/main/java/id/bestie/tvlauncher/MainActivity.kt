@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.graphics.Color
+import android.graphics.drawable.TransitionDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,13 +19,20 @@ import android.widget.Toast
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.Executors
 
 class MainActivity : LocalizedActivity() {
 
     private val uiHandler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
+
+    // v1.9 (point 10): multi-thread pool — each data source is submitted
+    // as its own task, so a slow source never blocks the others (the old
+    // single-thread chain ran weather -> prayer -> quake -> volcano
+    // strictly in sequence).
+    private val executor = Executors.newFixedThreadPool(4)
 
     private lateinit var greetingText: TextView
     private lateinit var clockText: TextView
@@ -32,12 +40,19 @@ class MainActivity : LocalizedActivity() {
     private lateinit var weatherMain: TextView
     private lateinit var weatherCity: TextView
     private lateinit var weatherAqi: TextView
+    private lateinit var weatherStatus: TextView
     private lateinit var prayerNext: TextView
     private lateinit var prayerAll: TextView
+    private lateinit var prayerStatus: TextView
     private lateinit var quakeMain: TextView
     private lateinit var quakeSub: TextView
-    private lateinit var quakeFelt: TextView
+    private lateinit var quakeStatus: TextView
     private lateinit var volcanoText: TextView
+    private lateinit var volcanoStatus: TextView
+    private lateinit var weatherCard: LinearLayout
+    private lateinit var prayerCard: LinearLayout
+    private lateinit var quakeCard: LinearLayout
+    private lateinit var volcanoCard: LinearLayout
     private lateinit var dockRow: LinearLayout
     private lateinit var wallpaperView: ImageView
     private lateinit var tintView: View
@@ -53,7 +68,35 @@ class MainActivity : LocalizedActivity() {
     private var lastSceneRes = 0
     private var lastTintApplied = Int.MIN_VALUE
 
+    // ------------------------------------------------------------ v1.9 state
+
+    /** Per-source load state (point 4): tracked independently per source. */
+    private enum class LoadState { LOADING, OK, ERROR }
+
+    private var weatherState = LoadState.LOADING
+    private var airState = LoadState.LOADING
+    private var prayerState = LoadState.LOADING
+    private var quakeState = LoadState.LOADING
+    private var volcanoState = LoadState.LOADING
+    private var weatherOkMs = 0L
+    private var airOkMs = 0L
+    private var prayerOkMs = 0L
+    private var quakeOkMs = 0L
+    private var volcanoOkMs = 0L
+
+    /** Today's prayer entries (name -> "HH:mm"), for the countdown tick (point 6). */
+    private var prayerEntriesMem: List<Pair<String, String>> = emptyList()
+
+    // Dock: signature of the resolved package list (point 8) and tiles by
+    // package, for focus restore.
+    private var dockSignature: String? = null
+    private val dockTiles = HashMap<String, View>()
+    private var lastFocusedPkg: String? = null
+
     companion object {
+        private val STATUS_GRAY: Int = Color.parseColor("#B0BEC5")
+        private val STATUS_AMBER: Int = Color.parseColor("#FFC107")
+
         // The stock Google TV home app: never a dock entry (we ARE the
         // launcher). Its label is exactly "Google TV"; see isDockWorthy().
         private const val STOCK_LAUNCHER_PACKAGE = "com.google.android.apps.tv.launcherx"
@@ -108,6 +151,20 @@ class MainActivity : LocalizedActivity() {
         }
     }
 
+    /**
+     * v1.9 (point 6): countdown tick, fully decoupled from the network.
+     * Recomputes the next prayer + remaining time from the stored entries
+     * every 30 s (the display granularity is minutes, so the shown value
+     * is never more than a minute stale — unlike before, when it was
+     * computed once per 15-minute fetch).
+     */
+    private val prayerTickRunnable = object : Runnable {
+        override fun run() {
+            updatePrayerCountdown()
+            uiHandler.postDelayed(this, 30_000)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -118,12 +175,19 @@ class MainActivity : LocalizedActivity() {
         weatherMain = findViewById(R.id.weatherMain)
         weatherCity = findViewById(R.id.weatherCity)
         weatherAqi = findViewById(R.id.weatherAqi)
+        weatherStatus = findViewById(R.id.weatherStatus)
         prayerNext = findViewById(R.id.prayerNext)
         prayerAll = findViewById(R.id.prayerAll)
+        prayerStatus = findViewById(R.id.prayerStatus)
         quakeMain = findViewById(R.id.quakeMain)
         quakeSub = findViewById(R.id.quakeSub)
-        quakeFelt = findViewById(R.id.quakeFelt)
+        quakeStatus = findViewById(R.id.quakeStatus)
         volcanoText = findViewById(R.id.volcanoText)
+        volcanoStatus = findViewById(R.id.volcanoStatus)
+        weatherCard = findViewById(R.id.weatherCard)
+        prayerCard = findViewById(R.id.prayerCard)
+        quakeCard = findViewById(R.id.quakeCard)
+        volcanoCard = findViewById(R.id.volcanoCard)
         dockRow = findViewById(R.id.dockRow)
         wallpaperView = findViewById(R.id.wallpaper)
         tintView = findViewById(R.id.tintView)
@@ -144,6 +208,41 @@ class MainActivity : LocalizedActivity() {
         }
         gearBtn.setColorFilter(Color.WHITE)
 
+        // Card actions (point 4): OK refetches ONLY that card's source;
+        // OK on the quake card opens the detail page (point 3). Focus
+        // swaps the card background to the teal-bordered variant.
+        weatherCard.setOnClickListener {
+            val city = Prefs.city(this)
+            executor.execute { fetchWeather(city) }
+            executor.execute { fetchAir(city) }
+        }
+        prayerCard.setOnClickListener {
+            val city = Prefs.city(this)
+            executor.execute { fetchPrayer(city) }
+        }
+        quakeCard.setOnClickListener {
+            startActivity(Intent(this, QuakeDetailActivity::class.java))
+        }
+        volcanoCard.setOnClickListener {
+            executor.execute { fetchVolcano() }
+        }
+        for (card in listOf(weatherCard, prayerCard, quakeCard, volcanoCard)) {
+            card.setOnFocusChangeListener { v, hasFocus ->
+                v.setBackgroundResource(
+                    if (hasFocus) R.drawable.glass_card_focused else R.drawable.glass_card
+                )
+            }
+        }
+
+        // Show the persisted last quake immediately (if any) so the card
+        // starts from last-good data instead of a spinner.
+        if (Prefs.quakeUpdatedAt(this) > 0) {
+            quakeOkMs = Prefs.quakeUpdatedAt(this)
+            quakeState = LoadState.OK
+            renderQuakeCard()
+        }
+        renderAllStatuses()
+
         buildDock()
         QuakeService.start(this)
     }
@@ -152,21 +251,36 @@ class MainActivity : LocalizedActivity() {
         super.onResume()
         uiHandler.removeCallbacks(clockRunnable)
         uiHandler.post(clockRunnable)
+        uiHandler.removeCallbacks(prayerTickRunnable)
+        uiHandler.post(prayerTickRunnable)
         if (System.currentTimeMillis() - lastFetchMs > 60_000) {
             uiHandler.removeCallbacks(refreshRunnable)
             uiHandler.post(refreshRunnable)
         }
+        // If the detail page refetched a newer quake while we were away,
+        // adopt it as the card's last-good data.
+        val persistedQuakeMs = Prefs.quakeUpdatedAt(this)
+        if (persistedQuakeMs > quakeOkMs) {
+            quakeOkMs = persistedQuakeMs
+            quakeState = LoadState.OK
+            renderQuakeCard()
+            renderQuakeStatus()
+        }
         buildDock()
+        restoreDockFocus()
     }
 
     override fun onPause() {
         super.onPause()
         uiHandler.removeCallbacks(clockRunnable)
+        uiHandler.removeCallbacks(prayerTickRunnable)
     }
 
     // ---------------------------------------------------------------- clock
 
     private fun updateClock() {
+        // The big clock + greeting stay on DEVICE time (point 13 changes
+        // only the prayer math, which uses the selected city's timezone).
         val now = Calendar.getInstance()
         val hour = now.get(Calendar.HOUR_OF_DAY)
         greetingText.text = getString(
@@ -228,8 +342,18 @@ class MainActivity : LocalizedActivity() {
 
     // ---------------------------------------------------------------- dock
 
+    /**
+     * v1.9 changes (points 8 + 9):
+     *  - The resolved package list is signed; when the signature is
+     *    unchanged the dock is NOT rebuilt on resume, so D-pad focus is
+     *    no longer destroyed every time the user comes back.
+     *  - Tiles are ordered by use: launch count desc, then last-launch
+     *    desc, then label A-Z. Never-launched apps (count 0) sort after
+     *    used ones, alphabetically.
+     *  - Clicking a tile records the launch in Prefs; focus restore
+     *    targets the last launched app's tile (see [restoreDockFocus]).
+     */
     private fun buildDock() {
-        dockRow.removeAllViews()
         val pm = packageManager
         val byPackage = LinkedHashMap<String, ResolveInfo>()
         val leanback = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
@@ -252,10 +376,25 @@ class MainActivity : LocalizedActivity() {
                 if (!isDockWorthy(pkg, label)) return@mapNotNull null
                 ri to label!!
             }
-            .sortedBy { it.second.lowercase() }
 
+        val signature = apps.map { it.first.activityInfo.packageName }.sorted().joinToString(",")
+        if (signature == dockSignature && dockRow.childCount > 0) {
+            return // unchanged app set: keep views (and focus) as they are
+        }
+        dockSignature = signature
+
+        val ordered = apps.sortedWith(
+            compareByDescending<Pair<ResolveInfo, String>> {
+                Prefs.launchCount(this, it.first.activityInfo.packageName)
+            }.thenByDescending {
+                Prefs.launchLast(this, it.first.activityInfo.packageName)
+            }.thenBy { it.second.lowercase() }
+        )
+
+        dockRow.removeAllViews()
+        dockTiles.clear()
         val inflater = LayoutInflater.from(this)
-        for ((ri, name) in apps) {
+        for ((ri, name) in ordered) {
             val pkg = ri.activityInfo.packageName
             val item = inflater.inflate(R.layout.item_dock_app, dockRow, false)
             val icon = item.findViewById<ImageView>(R.id.appIcon)
@@ -266,6 +405,8 @@ class MainActivity : LocalizedActivity() {
             } catch (e: Exception) {
             }
             item.setOnClickListener {
+                // Record the launch BEFORE leaving (points 8 + 9).
+                Prefs.recordLaunch(this, pkg)
                 val launch = pm.getLeanbackLaunchIntentForPackage(pkg)
                     ?: pm.getLaunchIntentForPackage(pkg)
                 if (launch != null) {
@@ -279,11 +420,25 @@ class MainActivity : LocalizedActivity() {
             item.setOnFocusChangeListener { _, hasFocus ->
                 // Label lives only inside the tile; no duplicate floating title.
                 label.setTextColor(if (hasFocus) Color.BLACK else Color.WHITE)
+                if (hasFocus) lastFocusedPkg = pkg
             }
+            dockTiles[pkg] = item
             dockRow.addView(item)
         }
-        if (dockRow.childCount > 0 && currentFocus == null) {
-            dockRow.post { dockRow.getChildAt(0)?.requestFocus() }
+    }
+
+    /**
+     * Point 8: after returning to the launcher, if nothing holds focus,
+     * put it back on the tile of the last launched app (falling back to
+     * the last focused tile, then the first tile).
+     */
+    private fun restoreDockFocus() {
+        dockRow.post {
+            if (currentFocus != null) return@post
+            val target = dockTiles[Prefs.lastLaunchedPackage(this)]
+                ?: lastFocusedPkg?.let { dockTiles[it] }
+                ?: dockRow.getChildAt(0)
+            target?.requestFocus()
         }
     }
 
@@ -336,36 +491,166 @@ class MainActivity : LocalizedActivity() {
 
     // ---------------------------------------------------------------- data
 
+    /**
+     * v1.9 (point 10): every source is an INDEPENDENT task on the pool —
+     * weather, air quality, prayer, quake and volcano load in parallel,
+     * so one slow source can no longer delay the others.
+     */
     private fun refreshData() {
         lastFetchMs = System.currentTimeMillis()
         val city = Prefs.city(this)
-        executor.execute {
-            fetchWeather(city)
-            fetchPrayer(city)
-            fetchQuake()
-            fetchVolcano()
+        executor.execute { fetchWeather(city) }
+        executor.execute { fetchAir(city) }
+        executor.execute { fetchPrayer(city) }
+        executor.execute { fetchQuake() }
+        executor.execute { fetchVolcano() }
+    }
+
+    // ------------------------------------------------------- status (point 4)
+
+    private fun hhmm(ms: Long, tz: TimeZone = TimeZone.getDefault()): String =
+        SimpleDateFormat("HH:mm", Locale.US).apply { timeZone = tz }.format(Date(ms))
+
+    private fun renderAllStatuses() {
+        renderWeatherStatus()
+        renderPrayerStatus()
+        renderQuakeStatus()
+        renderVolcanoStatus()
+    }
+
+    /** Weather card status combines the weather + air states (one card). */
+    private fun renderWeatherStatus() {
+        val failed = weatherState == LoadState.ERROR || airState == LoadState.ERROR
+        when {
+            failed -> {
+                weatherStatus.setTextColor(STATUS_AMBER)
+                val lastOk = maxOf(
+                    if (weatherState == LoadState.ERROR) weatherOkMs else 0L,
+                    if (airState == LoadState.ERROR) airOkMs else 0L
+                )
+                weatherStatus.text = if (lastOk > 0) {
+                    getString(R.string.status_failed_last, hhmm(lastOk))
+                } else {
+                    getString(R.string.status_failed)
+                }
+            }
+            weatherState == LoadState.OK && airState == LoadState.OK -> {
+                weatherStatus.setTextColor(STATUS_GRAY)
+                weatherStatus.text =
+                    getString(R.string.status_updated, hhmm(maxOf(weatherOkMs, airOkMs)))
+            }
+            else -> {
+                weatherStatus.setTextColor(STATUS_GRAY)
+                weatherStatus.text = getString(R.string.loading)
+            }
         }
     }
 
+    private fun renderPrayerStatus() {
+        when (prayerState) {
+            LoadState.OK -> {
+                prayerStatus.setTextColor(STATUS_GRAY)
+                prayerStatus.text =
+                    getString(R.string.status_updated, hhmm(prayerOkMs, cityTimeZone()))
+            }
+            LoadState.ERROR -> {
+                prayerStatus.setTextColor(STATUS_AMBER)
+                prayerStatus.text = if (prayerOkMs > 0) {
+                    getString(R.string.status_failed_last, hhmm(prayerOkMs, cityTimeZone()))
+                } else {
+                    getString(R.string.status_failed)
+                }
+            }
+            LoadState.LOADING -> {
+                prayerStatus.setTextColor(STATUS_GRAY)
+                prayerStatus.text = getString(R.string.loading)
+            }
+        }
+    }
+
+    private fun renderQuakeStatus() {
+        when (quakeState) {
+            LoadState.OK -> {
+                quakeStatus.setTextColor(STATUS_GRAY)
+                quakeStatus.text = getString(R.string.status_updated, hhmm(quakeOkMs))
+            }
+            LoadState.ERROR -> {
+                quakeStatus.setTextColor(STATUS_AMBER)
+                quakeStatus.text = if (quakeOkMs > 0) {
+                    getString(R.string.status_failed_last, hhmm(quakeOkMs))
+                } else {
+                    getString(R.string.status_failed)
+                }
+            }
+            LoadState.LOADING -> {
+                quakeStatus.setTextColor(STATUS_GRAY)
+                quakeStatus.text = getString(R.string.loading)
+            }
+        }
+    }
+
+    private fun renderVolcanoStatus() {
+        when (volcanoState) {
+            LoadState.OK -> {
+                volcanoStatus.setTextColor(STATUS_GRAY)
+                volcanoStatus.text = getString(R.string.status_updated, hhmm(volcanoOkMs))
+            }
+            LoadState.ERROR -> {
+                volcanoStatus.setTextColor(STATUS_AMBER)
+                volcanoStatus.text = if (volcanoOkMs > 0) {
+                    getString(R.string.status_failed_last, hhmm(volcanoOkMs))
+                } else {
+                    getString(R.string.status_failed)
+                }
+            }
+            LoadState.LOADING -> {
+                volcanoStatus.setTextColor(STATUS_GRAY)
+                volcanoStatus.text = getString(R.string.loading)
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ timezone
+
+    /**
+     * Point 13: the SELECTED city's timezone, learned from the Open-Meteo
+     * response (see fetchWeather). Falls back to the device timezone when
+     * unknown or unparseable.
+     */
+    private fun cityTimeZone(): TimeZone {
+        val name = Prefs.cityTimezone(this)
+        if (name.isBlank()) return TimeZone.getDefault()
+        val tz = TimeZone.getTimeZone(name)
+        // getTimeZone() silently returns GMT for unknown IDs; treat that
+        // as "unknown" unless the API really said GMT.
+        return if (tz.id == "GMT" && name != "GMT" && !name.startsWith("GMT")) {
+            TimeZone.getDefault()
+        } else {
+            tz
+        }
+    }
+
+    // -------------------------------------------------------------- weather
+
     private data class ForecastDay(val date: String, val code: Int, val max: Double, val min: Double)
 
+    /** Forecast + current conditions only; air quality is fetchAir (point 10). */
     private fun fetchWeather(city: City) {
         val forecastJson = Net.get(
             "https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}" +
                 "&current=temperature_2m,weather_code,is_day" +
                 "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto"
         )
-        val airJson = Net.get(
-            "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${city.lat}&longitude=${city.lon}" +
-                "&current=us_aqi,pm2_5&timezone=auto"
-        )
         var temp: Double? = null
         var code = -1
         var isDay = 1
+        var tzName = ""
         val forecastDays = mutableListOf<ForecastDay>()
         try {
             if (forecastJson != null) {
                 val root = JSONObject(forecastJson)
+                // Point 13: the city's IANA timezone comes with the response.
+                tzName = root.optString("timezone")
                 val current = root.getJSONObject("current")
                 temp = current.optDouble("temperature_2m")
                 code = current.optInt("weather_code", -1)
@@ -393,6 +678,41 @@ class MainActivity : LocalizedActivity() {
             }
         } catch (e: Exception) {
         }
+        val tempFinal = temp
+        val codeFinal = code
+        val isDayFinal = isDay
+        if (tzName.isNotBlank()) {
+            Prefs.setCityTimezone(this, Cities.list.indexOf(city), tzName)
+        }
+        if (tempFinal != null && !tempFinal.isNaN() && forecastJson != null) {
+            weatherState = LoadState.OK
+            weatherOkMs = System.currentTimeMillis()
+            uiHandler.post {
+                weatherMain.text = "${tempFinal.toInt()}°  ${weatherText(codeFinal)}"
+                weatherCity.text = city.name
+                lastWeatherCode = codeFinal
+                lastIsDay = isDayFinal
+                applyWallpaperVariant(codeFinal, isDayFinal)
+                buildForecast(forecastDays)
+                renderWeatherStatus()
+            }
+        } else {
+            // Point 4: no silent failure — keep last good data on screen,
+            // flip the state so the status line explains what happened.
+            weatherState = LoadState.ERROR
+            uiHandler.post {
+                if (weatherOkMs == 0L) weatherMain.text = getString(R.string.data_failed)
+                renderWeatherStatus()
+            }
+        }
+    }
+
+    /** Air quality (AQI + PM2.5) as its own source/task (points 4 + 10). */
+    private fun fetchAir(city: City) {
+        val airJson = Net.get(
+            "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${city.lat}&longitude=${city.lon}" +
+                "&current=us_aqi,pm2_5&timezone=auto"
+        )
         var aqi: Int? = null
         var pm25: Double? = null
         try {
@@ -403,28 +723,21 @@ class MainActivity : LocalizedActivity() {
             }
         } catch (e: Exception) {
         }
-        val tempFinal = temp
-        val codeFinal = code
-        val isDayFinal = isDay
         val aqiFinal = aqi
         val pmFinal = pm25
-        uiHandler.post {
-            if (tempFinal != null && !tempFinal.isNaN()) {
-                weatherMain.text = "${tempFinal.toInt()}°  ${weatherText(codeFinal)}"
-            } else {
-                weatherMain.text = getString(R.string.no_data)
-            }
-            weatherCity.text = city.name
-            lastWeatherCode = codeFinal
-            lastIsDay = isDayFinal
-            weatherAqi.text = if (aqiFinal != null) {
-                getString(
+        if (aqiFinal != null) {
+            airState = LoadState.OK
+            airOkMs = System.currentTimeMillis()
+            uiHandler.post {
+                weatherAqi.text = getString(
                     R.string.air_quality, aqiFinal,
                     pmFinal?.let { String.format(Locale.US, "%.0f", it) } ?: "-"
                 )
-            } else ""
-            applyWallpaperVariant(codeFinal, isDayFinal)
-            buildForecast(forecastDays)
+                renderWeatherStatus()
+            }
+        } else {
+            airState = LoadState.ERROR
+            uiHandler.post { renderWeatherStatus() }
         }
     }
 
@@ -458,9 +771,20 @@ class MainActivity : LocalizedActivity() {
                     ""
                 }
             }
+            // Point 12: the condition name for this chip's weather code,
+            // reused from the same mapping as the weather text. The icon
+            // gets it as its contentDescription and the whole chip reads
+            // "{day}, {condition}, {max}° / {min}°" to screen readers —
+            // previously the icon description was null, so only the
+            // temperature text was announced.
+            val condition = weatherText(day.code)
+            chip.contentDescription = String.format(
+                Locale.US, "%s, %s, %d° / %d°",
+                dayLabel, condition, Math.round(day.max), Math.round(day.min)
+            )
             chip.addView(TextView(this).apply {
                 text = dayLabel
-                textSize = 11f
+                textSize = 14f
                 setTextColor(Color.parseColor("#B0BEC5"))
                 gravity = android.view.Gravity.CENTER
                 maxLines = 1
@@ -468,7 +792,7 @@ class MainActivity : LocalizedActivity() {
             })
             chip.addView(ImageView(this).apply {
                 setImageResource(forecastIconFor(day.code))
-                contentDescription = null
+                contentDescription = condition
                 layoutParams = LinearLayout.LayoutParams(dp(26), dp(26))
                     .apply { topMargin = dp(3) }
             })
@@ -477,7 +801,7 @@ class MainActivity : LocalizedActivity() {
                     Locale.US, "%d°/%d°",
                     Math.round(day.max), Math.round(day.min)
                 )
-                textSize = 12f
+                textSize = 14f
                 setTextColor(Color.WHITE)
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 gravity = android.view.Gravity.CENTER
@@ -514,6 +838,10 @@ class MainActivity : LocalizedActivity() {
      * variant inside that set by the Open-Meteo weather code and
      * day/night. The API's is_day flag alone proved unreliable on the
      * TV, so the local clock window 18:30-05:30 also counts as night.
+     *
+     * v1.9 (point 7): when the variant CHANGES, the new scene crossfades
+     * over the old one in ~1.5 s via a TransitionDrawable; an unchanged
+     * variant sets nothing (no animation, no flicker).
      */
     private fun applyWallpaperVariant(code: Int, isDay: Int) {
         val isRain = code in RAIN_CODES
@@ -540,11 +868,32 @@ class MainActivity : LocalizedActivity() {
         }
         val scene = sceneRes(variant)
         if (scene != lastSceneRes) {
+            val firstPick = lastSceneRes == 0
             lastSceneRes = scene
-            wallpaperView.setImageResource(scene)
             // Hand the picked scene to the Settings screen (v1.8), which
             // uses the same photo as its background.
             Prefs.setLastSceneName(this, resources.getResourceEntryName(scene))
+            if (firstPick) {
+                wallpaperView.setImageResource(scene)
+            } else {
+                val old = wallpaperView.drawable
+                val newDrawable = resources.getDrawable(scene, theme)
+                if (old == null) {
+                    wallpaperView.setImageDrawable(newDrawable)
+                } else {
+                    // Flatten a previous transition to its final layer so
+                    // transitions never nest deeper than two layers.
+                    val base = if (old is TransitionDrawable && old.numberOfLayers > 0) {
+                        old.getDrawable(old.numberOfLayers - 1)
+                    } else {
+                        old
+                    }
+                    val transition = TransitionDrawable(arrayOf(base, newDrawable))
+                    transition.isCrossFadeEnabled = true
+                    wallpaperView.setImageDrawable(transition)
+                    transition.startTransition(1500)
+                }
+            }
         }
         if (tint != lastTintApplied) {
             lastTintApplied = tint
@@ -595,11 +944,27 @@ class MainActivity : LocalizedActivity() {
         }
     }
 
+    // --------------------------------------------------------------- prayer
+
+    /**
+     * v1.9 (points 4, 6, 13): the Aladhan request date is formatted in
+     * the CITY's timezone, and a successful fetch only stores the day's
+     * entries — the next/countdown computation happens in
+     * [updatePrayerCountdown] (per-minute tick, same city tz). A network
+     * failure sets the ERROR state instead of silently returning.
+     */
     private fun fetchPrayer(city: City) {
-        val today = SimpleDateFormat("dd-MM-yyyy", Locale.US).format(Calendar.getInstance().time)
+        val tz = cityTimeZone()
+        val today = SimpleDateFormat("dd-MM-yyyy", Locale.US)
+            .apply { timeZone = tz }
+            .format(Calendar.getInstance(tz).time)
         val json = Net.get(
             "https://api.aladhan.com/v1/timings/$today?latitude=${city.lat}&longitude=${city.lon}&method=20"
-        ) ?: return
+        )
+        if (json == null) {
+            onPrayerFailed()
+            return
+        }
         try {
             val timings = JSONObject(json).getJSONObject("data").getJSONObject("timings")
             fun clean(key: String): String {
@@ -615,65 +980,138 @@ class MainActivity : LocalizedActivity() {
                 (if (en) "Maghrib" else "Maghrib") to clean("Maghrib"),
                 (if (en) "Isha" else "Isya") to clean("Isha")
             ).filter { it.second.isNotBlank() }
-            if (entries.isEmpty()) return
-            val nowMin = Calendar.getInstance().let {
-                it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE)
+            if (entries.isEmpty()) {
+                onPrayerFailed()
+                return
             }
-            fun toMin(hhmm: String): Int {
-                val p = hhmm.split(":")
-                return (p.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (p.getOrNull(1)?.toIntOrNull() ?: 0)
-            }
-            var nextName = entries[0].first
-            var nextTime = entries[0].second
-            var diff = toMin(entries[0].second) + 24 * 60 - nowMin
-            for ((name, time) in entries) {
-                val d = toMin(time) - nowMin
-                if (d >= 0 && d < diff) {
-                    diff = d
-                    nextName = name
-                    nextTime = time
-                }
-            }
-            if (diff > 24 * 60) diff -= 24 * 60
-            val remaining = if (en) "${diff / 60} h ${diff % 60} m" else "${diff / 60} j ${diff % 60} m"
-            val all = entries.joinToString("  •  ") { "${it.first} ${it.second}" }
+            val cityDateIso = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                .apply { timeZone = tz }
+                .format(Calendar.getInstance(tz).time)
+            prayerEntriesMem = entries
+            Prefs.savePrayerEntries(this, entries, cityDateIso)
+            prayerState = LoadState.OK
+            prayerOkMs = System.currentTimeMillis()
             uiHandler.post {
-                prayerNext.text = getString(R.string.next_prayer, nextName, nextTime, remaining)
-                prayerAll.text = all
+                updatePrayerCountdown()
+                renderPrayerStatus()
             }
         } catch (e: Exception) {
-            uiHandler.post { prayerNext.text = getString(R.string.no_data) }
+            onPrayerFailed()
         }
     }
+
+    private fun onPrayerFailed() {
+        prayerState = LoadState.ERROR
+        uiHandler.post {
+            if (prayerEntriesMem.isEmpty() && Prefs.prayerEntries(this).isEmpty()) {
+                prayerNext.text = getString(R.string.data_failed)
+            }
+            renderPrayerStatus()
+        }
+    }
+
+    /**
+     * Recomputes "next prayer + remaining" from the stored entries using
+     * the city timezone (points 6 + 13). UI thread only. When every time
+     * today has passed, the first entry is next (tomorrow) — the diff
+     * wraps by +24 h as before.
+     */
+    private fun updatePrayerCountdown() {
+        if (prayerEntriesMem.isEmpty()) {
+            prayerEntriesMem = Prefs.prayerEntries(this)
+        }
+        val entries = prayerEntriesMem
+        if (entries.isEmpty()) return
+        val tz = cityTimeZone()
+        val nowCal = Calendar.getInstance(tz)
+        val nowMin = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
+        fun toMin(hhmm: String): Int {
+            val p = hhmm.split(":")
+            return (p.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (p.getOrNull(1)?.toIntOrNull() ?: 0)
+        }
+        var nextName = entries[0].first
+        var nextTime = entries[0].second
+        var diff = toMin(entries[0].second) + 24 * 60 - nowMin
+        for ((name, time) in entries) {
+            val d = toMin(time) - nowMin
+            if (d >= 0 && d < diff) {
+                diff = d
+                nextName = name
+                nextTime = time
+            }
+        }
+        if (diff > 24 * 60) diff -= 24 * 60
+        val en = Prefs.isEnglish(this)
+        val remaining = if (en) "${diff / 60} h ${diff % 60} m" else "${diff / 60} j ${diff % 60} m"
+        prayerNext.text = getString(R.string.next_prayer, nextName, nextTime, remaining)
+        prayerAll.text = entries.joinToString("  •  ") { "${it.first} ${it.second}" }
+    }
+
+    // ---------------------------------------------------------------- quake
 
     private fun fetchQuake() {
         val json = Net.get(QuakeService.AUTOGEMPA_URL)
         val quake = json?.let { QuakeParser.parseLatest(it) }
-        uiHandler.post {
-            if (quake != null) {
-                quakeMain.text = getString(
-                    R.string.quake_line,
-                    OverlayPopup.formatMag(quake.magnitude), quake.wilayah
-                )
-                quakeSub.text = getString(R.string.quake_depth, quake.kedalaman, quake.jam)
-                val felt = quake.dirasakan.ifBlank { quake.potensi }
-                quakeFelt.text = felt
-                quakeFelt.visibility = if (felt.isBlank()) View.GONE else View.VISIBLE
-            } else {
-                quakeMain.text = getString(R.string.no_data)
-                quakeSub.text = ""
-                quakeFelt.text = ""
-                quakeFelt.visibility = View.GONE
+        if (quake != null) {
+            val now = System.currentTimeMillis()
+            // Point 3: persist the full record for the detail page.
+            Prefs.saveQuake(
+                this, quake.magnitude, quake.wilayah, quake.tanggal, quake.jam,
+                quake.dateTime, quake.kedalaman, quake.koordinat, quake.dirasakan,
+                quake.potensi, now
+            )
+            quakeState = LoadState.OK
+            quakeOkMs = now
+            uiHandler.post {
+                renderQuakeCard()
+                renderQuakeStatus()
+            }
+        } else {
+            // Point 4: keep the last good data (Prefs + card untouched);
+            // only the state flips so the status line turns amber.
+            quakeState = LoadState.ERROR
+            uiHandler.post {
+                if (Prefs.quakeUpdatedAt(this) == 0L) {
+                    quakeMain.text = getString(R.string.data_failed)
+                    quakeSub.text = ""
+                }
+                renderQuakeStatus()
             }
         }
     }
 
-    /** Best-effort scrape of the public MAGMA VONA listing; any failure just shows "unavailable". */
+    /** Renders the home quake summary (point 3) from the persisted record. */
+    private fun renderQuakeCard() {
+        if (Prefs.quakeUpdatedAt(this) == 0L) return
+        quakeMain.text = getString(
+            R.string.quake_summary,
+            OverlayPopup.formatMag(Prefs.quakeMag(this)), Prefs.quakeRegion(this)
+        )
+        quakeSub.text = getString(
+            R.string.quake_summary_sub,
+            Prefs.quakeTanggal(this), Prefs.quakeJam(this), Prefs.quakeDepth(this)
+        )
+    }
+
+    // -------------------------------------------------------------- volcano
+
+    /** Best-effort scrape of the public MAGMA VONA listing. */
     private fun fetchVolcano() {
         val html = Net.get("https://magma.esdm.go.id/v1/vona", 20000)
         val text = html?.let { parseVona(it) }
-        uiHandler.post {
-            volcanoText.text = text ?: getString(R.string.volcano_unavailable)
+        if (text != null) {
+            volcanoState = LoadState.OK
+            volcanoOkMs = System.currentTimeMillis()
+            uiHandler.post {
+                volcanoText.text = text
+                renderVolcanoStatus()
+            }
+        } else {
+            volcanoState = LoadState.ERROR
+            uiHandler.post {
+                if (volcanoOkMs == 0L) volcanoText.text = getString(R.string.data_failed)
+                renderVolcanoStatus()
+            }
         }
     }
 

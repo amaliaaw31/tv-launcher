@@ -273,3 +273,6 @@ Kunci tanda tangan kantor berubah lagi karena reset environment (signer baru 990
 
 ## Update v1.8 (28 Okt 2026)
 Berisi: kaca dark-smoky (teks tajam di foto terang), chip forecast satu baris di bawah tanggal, latar Pengaturan = foto kota asli + scrim gelap, baris Pengaturan tidak melar. SIGNER BERUBAH LAGI (9af22634 vs v1.7 99066d91) — dari v1.7 wajib adb uninstall id.bestie.tvlauncher dulu, lalu install baru; setelah itu set ulang kota (Bandung), izin overlay, akses notifikasi, dan home utama (pm disable-user --user 0 com.google.android.apps.tv.launcherx).
+
+## Update v1.9 (28 Okt 2026)
+Berisi 12 poin review pemilik: teks info 15-20sp + info diringkas; panel kaca pekat (alpha 0,90-0,85) + scrim area jam; ringkasan gempa terbaca + halaman Detail Gempa (OK dari kartu, ada Coba Lagi); status data per sumber (Diperbarui HH:mm / Gagal memuat - data terakhir); hitung mundur sholat bergerak tiap 30 detik tanpa jaringan; crossfade wallpaper 1,5 detik; fokus remote dipulihkan + dock tidak dibangun ulang; urutan dock = paling sering dipakai di depan; pemuatan 5 sumber paralel; kategori Akun -> Kontrol dari HP; deskripsi aksesibilitas ikon prakiraan; zona waktu mengikuti kota pilihan untuk hitungan sholat. SIGNER BERUBAH LAGI (47ceaa vs v1.8 9af226) - dari v1.8 wajib adb uninstall dulu + install baru + checklist setelan.

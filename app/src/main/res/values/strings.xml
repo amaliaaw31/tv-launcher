@@ -49,7 +49,7 @@
     <string name="cat_appearance">Penampilan</string>
     <string name="cat_notifications">Pemberitahuan</string>
     <string name="cat_quake">Perlindungan Gempa</string>
-    <string name="cat_account">Akun</string>
+    <string name="cat_account">Kontrol dari HP</string>
     <string name="cat_about">Tentang</string>
     <string name="status_active">Aktif</string>
     <string name="status_inactive">Belum Aktif</string>
@@ -63,4 +63,21 @@
     <string name="about_package_label">Paket</string>
     <string name="about_credit">Data cuaca &amp; gempa: BMKG • Open-Meteo • Aladhan • MAGMA</string>
     <string name="connect_phone_hint">Tampilkan kode QR</string>
+    <!-- v1.9: quake summary + detail page, per-source data states -->
+    <string name="quake_summary">M %1$s — %2$s</string>
+    <string name="quake_summary_sub">%1$s • %2$s • Kedalaman %3$s</string>
+    <string name="quake_detail_hint">Tekan OK untuk detail ›</string>
+    <string name="status_updated">Diperbarui %1$s</string>
+    <string name="status_failed_last">Gagal memuat — data terakhir • %1$s</string>
+    <string name="status_failed">Gagal memuat</string>
+    <string name="data_failed">Gagal memuat data</string>
+    <string name="retry">Coba Lagi</string>
+    <string name="quake_detail_title">Detail Gempa</string>
+    <string name="quake_region_label">Wilayah</string>
+    <string name="quake_time_label">Waktu</string>
+    <string name="quake_depth_label">Kedalaman</string>
+    <string name="quake_coords_label">Koordinat</string>
+    <string name="quake_felt_label">Dirasakan</string>
+    <string name="quake_tsunami_label">Potensi Tsunami</string>
+    <string name="quake_source">Sumber: BMKG • Diperbarui %1$s</string>
 </resources>

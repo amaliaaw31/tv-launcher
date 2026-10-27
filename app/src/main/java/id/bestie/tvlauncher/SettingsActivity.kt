@@ -249,7 +249,7 @@ class SettingsActivity : LocalizedActivity() {
 
     private fun buildAboutRows() {
         addInfoRow(getString(R.string.about_app_label), getString(R.string.app_name))
-        addInfoRow(getString(R.string.about_version_label), "1.8")
+        addInfoRow(getString(R.string.about_version_label), "1.9")
         addInfoRow(getString(R.string.about_package_label), packageName)
         addInfoTextRow(getString(R.string.about_credit))
     }

@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Category item (v1.8): dark smoky glass like the settings rows.
-     Selected keeps a dark teal-slate tint so the active category is
-     visible without focus; focus adds the 2dp teal border. -->
+<!-- Category item (v1.9): dense dark slate like the settings rows
+     (~90% -> ~85% alpha). Selected keeps a dark teal-slate tint so
+     the active category is visible without focus; focus adds the
+     2dp teal border. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_selected="true" android:state_focused="true">
         <shape android:shape="rectangle">
             <corners android:radius="12dp" />
             <gradient
                 android:angle="270"
-                android:endColor="#4D0B3542"
-                android:startColor="#66104A5C"
+                android:endColor="#E60B3542"
+                android:startColor="#F0104A5C"
                 android:type="linear" />
             <stroke android:width="2dp" android:color="#22D3EE" />
         </shape>
@@ -19,8 +20,8 @@
             <corners android:radius="12dp" />
             <gradient
                 android:angle="270"
-                android:endColor="#66141C26"
-                android:startColor="#80202B38"
+                android:endColor="#E60B1219"
+                android:startColor="#F0141C26"
                 android:type="linear" />
             <stroke android:width="2dp" android:color="#22D3EE" />
         </shape>
@@ -30,8 +31,8 @@
             <corners android:radius="12dp" />
             <gradient
                 android:angle="270"
-                android:endColor="#4D0B3542"
-                android:startColor="#59104A5C"
+                android:endColor="#D90B3542"
+                android:startColor="#E6104A5C"
                 android:type="linear" />
             <stroke android:width="1dp" android:color="#59FFFFFF" />
         </shape>
@@ -41,8 +42,8 @@
             <corners android:radius="12dp" />
             <gradient
                 android:angle="270"
-                android:endColor="#4D141C26"
-                android:startColor="#66202B38"
+                android:endColor="#D90B1219"
+                android:startColor="#E6141C26"
                 android:type="linear" />
             <stroke android:width="1dp" android:color="#59FFFFFF" />
         </shape>
