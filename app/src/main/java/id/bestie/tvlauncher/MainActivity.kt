@@ -274,6 +274,18 @@ class MainActivity : LocalizedActivity() {
         // immediately so its geometry is stable before data arrives.
         buildForecast(null)
 
+        // v2.3 (point 1): whenever focus lands OUTSIDE the open dock
+        // (on a main-area widget), close the dock — the user's new
+        // focus target stands (restoreFocus = false). Focus moving
+        // INTO the dock during showDock is inside the panel, so the
+        // open sequence never triggers this; a null newFocus (focus
+        // cleared, e.g. a dialog window taking over) is ignored.
+        window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+            if (dockOpen && newFocus != null && !isViewInsideDock(newFocus)) {
+                hideDock(animate = true, restoreFocus = false)
+            }
+        }
+
         buildDock()
         QuakeService.start(this)
     }
@@ -471,6 +483,11 @@ class MainActivity : LocalizedActivity() {
                 val launch = pm.getLeanbackLaunchIntentForPackage(pkg)
                     ?: pm.getLaunchIntentForPackage(pkg)
                 if (launch != null) {
+                    // v2.3 (point 2): close the dock as part of the
+                    // launch, so its state is already closed when the
+                    // app starts (the onResume force-hide stays as a
+                    // backstop). No animation: we are leaving anyway.
+                    hideDock(animate = false, restoreFocus = false)
                     try {
                         startActivity(launch)
                     } catch (e: Exception) {
@@ -503,6 +520,13 @@ class MainActivity : LocalizedActivity() {
         focusBeforeDock = currentFocus
         dockPanel.visibility = View.VISIBLE
         dockPanel.post {
+            // v2.3 (point 4): a hide may have won the race while this
+            // runnable was queued (DOWN then immediate UP/BACK) —
+            // dockOpen is the single source of truth; never resurrect.
+            if (!dockOpen) return@post
+            // Cancel any in-flight hide animation; its (guarded) end
+            // action no-ops now that dockOpen is true again.
+            dockPanel.animate().cancel()
             dockPanel.translationY = dockPanel.height.toFloat()
             dockPanel.animate().translationY(0f).setDuration(200).start()
             val target = dockTiles[Prefs.lastLaunchedPackage(this)]
@@ -515,17 +539,29 @@ class MainActivity : LocalizedActivity() {
         val restore = if (restoreFocus) focusBeforeDock else null
         focusBeforeDock = null
         if (!dockOpen) {
+            // v2.3 (point 4): also cancel/reset, so a late call (e.g.
+            // the onResume backstop) can never leave a half-animated
+            // panel behind.
+            dockPanel.animate().cancel()
             dockPanel.visibility = View.GONE
+            dockPanel.translationY = 0f
             return
         }
         dockOpen = false
         if (animate && dockPanel.visibility == View.VISIBLE) {
+            dockPanel.animate().cancel()
             dockPanel.animate()
                 .translationY(dockPanel.height.toFloat())
                 .setDuration(200)
                 .withEndAction {
-                    dockPanel.visibility = View.GONE
-                    dockPanel.translationY = 0f
+                    // v2.3 (point 4): a reopen may have happened while
+                    // this hide was animating (rapid DOWN-UP-DOWN) —
+                    // finish the hide ONLY if the dock is still meant
+                    // to be closed; otherwise the panel stays visible.
+                    if (!dockOpen) {
+                        dockPanel.visibility = View.GONE
+                        dockPanel.translationY = 0f
+                    }
                 }
                 .start()
         } else {
@@ -536,13 +572,19 @@ class MainActivity : LocalizedActivity() {
         restore?.requestFocus()
     }
 
-    private fun isFocusInsideDock(): Boolean {
-        var v: View? = currentFocus
+    /** True when [view] is the dock panel or one of its descendants. */
+    private fun isViewInsideDock(view: View): Boolean {
+        var v: View? = view
         while (v != null) {
             if (v == dockPanel) return true
             v = v.parent as? View
         }
         return false
+    }
+
+    private fun isFocusInsideDock(): Boolean {
+        val focused = currentFocus ?: return false
+        return isViewInsideDock(focused)
     }
 
     /**

@@ -285,3 +285,6 @@ Ikon judul kartu (5 vector baru: cuaca, udara, sholat, gempa, gunung api; dekora
 
 ## Update v2.2 (28 Okt 2026)
 Grid forecast 78 persen lebar area kiri, rata kiri dengan tanggal, ikon cuaca 44->56dp, sel lebih mendekati persegi (209x126dp); kolom kanan terverifikasi seragam (padding 11/8dp, jarak 5dp); kartu cuaca diringkas (suhu+kondisi+kota saja; AQI/PM2.5 pindah ke dialog OK); kartu sholat hanya waktu berikutnya (jadwal lengkap via dialog OK); kartu gempa baris kedua hanya tanggal+waktu (kedalaman tetap di dialog); batas kartu diam diturunkan alpha-nya (cyan hanya saat fokus). SIGNER BERBEDA lagi (95324eda vs v2.1 697d1b8f) - update v2.1->v2.2 perlu uninstall + install segar.
+
+## Update v2.3 (28 Okt 2026)
+Perilaku dock: sembunyi otomatis saat fokus pindah ke widget (OnGlobalFocusChangeListener, tanpa menarik fokus balik); sembunyi saat tile diluncurkan (sebelum startActivity); ATAS/BACK tetap menutup + fokus kembali (jalur dispatchKeyEvent tidak diubah); anti-resurreksi animasi - runnable post di showDock memeriksa dockOpen, withEndAction hide dibungkus if(!dockOpen), animate().cancel() di kedua arah. SIGNER BERBEDA lagi (620385cc vs v2.2 95324eda) - uninstall + install segar lagi.
