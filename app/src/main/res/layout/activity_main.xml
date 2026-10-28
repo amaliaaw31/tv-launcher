@@ -27,10 +27,10 @@
         android:layout_height="match_parent"
         android:background="@drawable/scrim_clock" />
 
-    <!-- Content: main row (clock + widgets) above a fixed-height dock, so the
-         widget column can never spill over the dock; excess is clipped inside
-         the row instead. All sizes are the v1.4 ~0.75 scale of the original
-         design for the 24" TV. -->
+    <!-- Content: main row fills the whole screen now. v2.1 (point 2):
+         the dock is no longer a fixed-height strip in the flow — it
+         is a hidden overlay tray (see dockPanel at the bottom), so
+         the main row reclaims the full height. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -38,8 +38,7 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_height="match_parent"
             android:orientation="horizontal">
 
             <!-- left: greeting + clock + date + forecast, plain text, no panel -->
@@ -87,31 +86,49 @@
                     android:textColor="#F5F5F5"
                     android:textSize="21sp" />
 
-                <!-- 4-day forecast strip, filled by MainActivity.
-                     v1.8: match_parent so the strip spans the whole left
-                     column and the 4 weighted chips form ONE row under
-                     the date (was wrap_content + fixed-width chips,
-                     which let the strip render squeezed/stacked). -->
+                <!-- 4-day forecast, filled by MainActivity as a
+                     2x2 GRID (v2.1, point 3): two rows of two cells
+                     built in code into this vertical container.
+                     (v1.8-v2.0 was a single horizontal strip of four
+                     weighted chips.) -->
                 <LinearLayout
                     android:id="@+id/forecastRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
-                    android:orientation="horizontal" />
+                    android:orientation="vertical" />
             </LinearLayout>
 
-            <!-- right: compact widget cards, confined to the main row.
+            <!-- right: compact widget cards.
                  The top padding (v1.5) pushes the first card fully below
                  the top-right Input + gear row (marginTop 20dp + 36dp tall
                  + 12dp gap), so a card never sits beside or behind the
-                 buttons. -->
-            <LinearLayout
+                 buttons.
+                 v2.1 (QA-2): the column now sits in a ScrollView. Root
+                 cause of the missing volcano strip: this column used to
+                 be a plain non-scrolling LinearLayout confined to
+                 screen-minus-dock height; when v1.9's status lines +
+                 quake hint + larger text grew the first three cards
+                 past the available height, the LAST child (volcano
+                 strip) was laid out beyond the bottom edge and clipped
+                 — in the tree, but never painted. The ScrollView is the
+                 structural guarantee (D-pad focus scrolls it into
+                 view); the card spacing trims below + the reclaimed
+                 dock height make all four cards fit without scrolling
+                 in the normal case. -->
+            <ScrollView
                 android:layout_width="330dp"
                 android:layout_height="match_parent"
                 android:layout_marginEnd="27dp"
+                android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:gravity="top"
                 android:orientation="vertical"
-                android:paddingTop="68dp">
+                android:paddingTop="68dp"
+                android:paddingBottom="10dp">
 
                 <!-- weather card: title, main line, city, ONE AQI
                      line, status line. Height wraps content like every
@@ -122,21 +139,38 @@
                     android:id="@+id/weatherCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
+                    android:layout_marginBottom="5dp"
                     android:background="@drawable/glass_card"
                     android:focusable="true"
                     android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="10dp"
+                    android:paddingTop="8dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="10dp">
+                    android:paddingBottom="8dp">
 
-                    <TextView
+                    <!-- v2.1 (point 1): title gets a decorative line
+                         icon (contentDescription=@null — the text
+                         label beside it already names the info). -->
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/weather_title"
-                        android:textColor="#B0BEC5"
-                        android:textSize="15sp" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:layout_marginEnd="6dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_title_weather" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/weather_title"
+                            android:textColor="#B0BEC5"
+                            android:textSize="15sp" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/weatherMain"
@@ -154,19 +188,37 @@
                         android:textColor="#ECEFF1"
                         android:textSize="16sp" />
 
-                    <TextView
-                        android:id="@+id/weatherAqi"
+                    <!-- v2.1 (point 1): the air-quality row gets the
+                         wind icon — it is the air-quality info row of
+                         this card. Decorative; the AQI text remains
+                         the label. -->
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:textColor="#FFD54F"
-                        android:textSize="16sp" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:layout_marginEnd="6dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_title_air" />
+
+                        <TextView
+                            android:id="@+id/weatherAqi"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="#FFD54F"
+                            android:textSize="16sp" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/weatherStatus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="2dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
                         android:textSize="16sp" />
@@ -178,21 +230,35 @@
                     android:id="@+id/prayerCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
+                    android:layout_marginBottom="5dp"
                     android:background="@drawable/glass_card"
                     android:focusable="true"
                     android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="10dp"
+                    android:paddingTop="8dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="10dp">
+                    android:paddingBottom="8dp">
 
-                    <TextView
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/prayer_title"
-                        android:textColor="#B0BEC5"
-                        android:textSize="15sp" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:layout_marginEnd="6dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_title_prayer" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/prayer_title"
+                            android:textColor="#B0BEC5"
+                            android:textSize="15sp" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/prayerNext"
@@ -215,7 +281,7 @@
                         android:id="@+id/prayerStatus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="2dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
                         android:textSize="16sp" />
@@ -228,21 +294,35 @@
                     android:id="@+id/quakeCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="6dp"
+                    android:layout_marginBottom="5dp"
                     android:background="@drawable/glass_card"
                     android:focusable="true"
                     android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="10dp"
+                    android:paddingTop="8dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="10dp">
+                    android:paddingBottom="8dp">
 
-                    <TextView
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/quake_title"
-                        android:textColor="#B0BEC5"
-                        android:textSize="15sp" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:layout_marginEnd="6dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_title_quake" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/quake_title"
+                            android:textColor="#B0BEC5"
+                            android:textSize="15sp" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/quakeMain"
@@ -277,7 +357,7 @@
                         android:id="@+id/quakeStatus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="2dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
                         android:textSize="16sp" />
@@ -293,15 +373,22 @@
                     android:focusable="true"
                     android:orientation="vertical"
                     android:paddingStart="11dp"
-                    android:paddingTop="10dp"
+                    android:paddingTop="8dp"
                     android:paddingEnd="11dp"
-                    android:paddingBottom="10dp">
+                    android:paddingBottom="8dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_height="19dp"
+                            android:layout_marginEnd="6dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_title_volcano" />
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -327,40 +414,49 @@
                         android:id="@+id/volcanoStatus"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="2dp"
                         android:text="@string/loading"
                         android:textColor="#B0BEC5"
                         android:textSize="16sp" />
                 </LinearLayout>
             </LinearLayout>
+            </ScrollView>
         </LinearLayout>
-
-        <!-- bottom dock: fixed height reserved in the layout flow.
-             v1.7: no bar background anymore (the old dock_gradient is
-             gone) — the glass tiles float directly on the wallpaper. -->
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="114dp">
-
-            <HorizontalScrollView
-                android:id="@+id/dockScroll"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:paddingTop="10dp"
-                android:paddingBottom="8dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:id="@+id/dockRow"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_horizontal"
-                    android:orientation="horizontal"
-                    android:paddingStart="21dp"
-                    android:paddingEnd="21dp" />
-            </HorizontalScrollView>
-        </FrameLayout>
     </LinearLayout>
+
+    <!-- bottom dock (v2.1, point 2): HIDDEN overlay tray. Starts
+         GONE — takes no focus, reserves no space. D-pad DOWN from the
+         bottom-most main-area element slides it up (~200ms) over the
+         wallpaper; UP or BACK slides it away again. The tray glass is
+         TRANSPARENT smoky glass (owner rejected an opaque black
+         panel); the tiles keep their dense dock_item background so
+         icons/labels stay readable. MainActivity drives it. -->
+    <FrameLayout
+        android:id="@+id/dockPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/dock_panel"
+        android:visibility="gone">
+
+        <HorizontalScrollView
+            android:id="@+id/dockScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="10dp"
+            android:paddingBottom="8dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/dockRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:orientation="horizontal"
+                android:paddingStart="21dp"
+                android:paddingEnd="21dp" />
+        </HorizontalScrollView>
+    </FrameLayout>
 
     <!-- top-right: Input pill + gear icon only -->
     <LinearLayout

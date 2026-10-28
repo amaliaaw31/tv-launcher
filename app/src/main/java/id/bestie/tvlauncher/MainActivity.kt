@@ -9,8 +9,11 @@ import android.graphics.drawable.TransitionDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.FocusFinder
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -56,6 +59,7 @@ class MainActivity : LocalizedActivity() {
     private lateinit var quakeCard: LinearLayout
     private lateinit var volcanoCard: LinearLayout
     private lateinit var dockRow: LinearLayout
+    private lateinit var dockPanel: View
     private lateinit var wallpaperView: ImageView
     private lateinit var tintView: View
     private lateinit var forecastRow: LinearLayout
@@ -94,6 +98,12 @@ class MainActivity : LocalizedActivity() {
     private var dockSignature: String? = null
     private val dockTiles = HashMap<String, View>()
     private var lastFocusedPkg: String? = null
+
+    // v2.1 (point 2): hidden-dock bookkeeping — whether the overlay
+    // tray is open, and the main-area element that had focus when it
+    // was opened (focus returns there when the tray closes).
+    private var dockOpen = false
+    private var focusBeforeDock: View? = null
 
     companion object {
         private val STATUS_GRAY: Int = Color.parseColor("#B0BEC5")
@@ -191,6 +201,7 @@ class MainActivity : LocalizedActivity() {
         quakeCard = findViewById(R.id.quakeCard)
         volcanoCard = findViewById(R.id.volcanoCard)
         dockRow = findViewById(R.id.dockRow)
+        dockPanel = findViewById(R.id.dockPanel)
         wallpaperView = findViewById(R.id.wallpaper)
         tintView = findViewById(R.id.tintView)
         forecastRow = findViewById(R.id.forecastRow)
@@ -245,6 +256,10 @@ class MainActivity : LocalizedActivity() {
         }
         renderAllStatuses()
 
+        // v2.1 (point 3): render the forecast grid's placeholder cells
+        // immediately so its geometry is stable before data arrives.
+        buildForecast(null)
+
         buildDock()
         QuakeService.start(this)
     }
@@ -269,7 +284,11 @@ class MainActivity : LocalizedActivity() {
             renderQuakeStatus()
         }
         buildDock()
-        restoreDockFocus()
+        // v2.1 (point 2): the dock always starts hidden when the user
+        // comes back to the launcher (e.g. after returning from a
+        // launched app) — this replaces the v1.9 behaviour of forcing
+        // focus onto a dock tile on resume.
+        hideDock(animate = false, restoreFocus = false)
     }
 
     override fun onPause() {
@@ -352,22 +371,35 @@ class MainActivity : LocalizedActivity() {
      *  - Tiles are ordered by use: launch count desc, then last-launch
      *    desc, then label A-Z. Never-launched apps (count 0) sort after
      *    used ones, alphabetically.
-     *  - Clicking a tile records the launch in Prefs; focus restore
-     *    targets the last launched app's tile (see [restoreDockFocus]).
+     *  - Clicking a tile records the launch in Prefs.
+     *
+     * v2.1 (QA-1): dedupe by LABEL across packages. Two different
+     * packages can share one display label (the owner's TV has LOKTV
+     * twice: a TV package and a phone package, both visible since the
+     * v2.0 <queries> fix). After the usage sort, each normalized label
+     * keeps ONE entry: the leanback (TV) variant when exactly one
+     * entry of the group is leanback, otherwise the first entry in
+     * sorted order. Worked example: "LOKTV" group = [loktv-tv
+     * (leanback), loktv-mobile (launcher-only)] -> the TV package
+     * survives; if both were leanback, the more-used / earlier-sorted
+     * one would.
      */
     private fun buildDock() {
         val pm = packageManager
-        val byPackage = LinkedHashMap<String, ResolveInfo>()
+        // Package -> (ResolveInfo, cameFromLeanbackQuery). The leanback
+        // query runs first, so a package with both a TV and a phone
+        // entry point keeps its TV entry (existing behaviour).
+        val byPackage = LinkedHashMap<String, Pair<ResolveInfo, Boolean>>()
         val leanback = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
         val normal = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         for (ri in pm.queryIntentActivities(leanback, 0)) {
-            byPackage.putIfAbsent(ri.activityInfo.packageName, ri)
+            byPackage.putIfAbsent(ri.activityInfo.packageName, ri to true)
         }
         for (ri in pm.queryIntentActivities(normal, 0)) {
-            byPackage.putIfAbsent(ri.activityInfo.packageName, ri)
+            byPackage.putIfAbsent(ri.activityInfo.packageName, ri to false)
         }
         val apps = byPackage.values
-            .mapNotNull { ri ->
+            .mapNotNull { (ri, isLeanback) ->
                 val pkg = ri.activityInfo.packageName
                 if (pkg == packageName || isSystemSettings(pkg)) return@mapNotNull null
                 val label = try {
@@ -376,7 +408,7 @@ class MainActivity : LocalizedActivity() {
                     null
                 }
                 if (!isDockWorthy(pkg, label)) return@mapNotNull null
-                ri to label!!
+                Triple(ri, label!!, isLeanback)
             }
 
         val signature = apps.map { it.first.activityInfo.packageName }.sorted().joinToString(",")
@@ -386,17 +418,30 @@ class MainActivity : LocalizedActivity() {
         dockSignature = signature
 
         val ordered = apps.sortedWith(
-            compareByDescending<Pair<ResolveInfo, String>> {
+            compareByDescending<Triple<ResolveInfo, String, Boolean>> {
                 Prefs.launchCount(this, it.first.activityInfo.packageName)
             }.thenByDescending {
                 Prefs.launchLast(this, it.first.activityInfo.packageName)
             }.thenBy { it.second.lowercase() }
         )
 
+        // QA-1 label dedupe (see the doc comment above).
+        val keeperPkgByLabel = HashMap<String, String>()
+        for ((_, group) in ordered.groupBy { it.second.trim().lowercase() }) {
+            val leanbacks = group.filter { it.third }
+            val keeper = if (leanbacks.size == 1) leanbacks[0] else group[0]
+            keeperPkgByLabel[group[0].second.trim().lowercase()] =
+                keeper.first.activityInfo.packageName
+        }
+        val deduped = ordered.filter {
+            keeperPkgByLabel[it.second.trim().lowercase()] ==
+                it.first.activityInfo.packageName
+        }
+
         dockRow.removeAllViews()
         dockTiles.clear()
         val inflater = LayoutInflater.from(this)
-        for ((ri, name) in ordered) {
+        for ((ri, name) in deduped) {
             val pkg = ri.activityInfo.packageName
             val item = inflater.inflate(R.layout.item_dock_app, dockRow, false)
             val icon = item.findViewById<ImageView>(R.id.appIcon)
@@ -429,19 +474,110 @@ class MainActivity : LocalizedActivity() {
         }
     }
 
+    // ------------------------------------------------------- dock v2.1
+
     /**
-     * Point 8: after returning to the launcher, if nothing holds focus,
-     * put it back on the tile of the last launched app (falling back to
-     * the last focused tile, then the first tile).
+     * v2.1 (point 2): the dock is a hidden overlay tray. [showDock]
+     * slides it up (~200 ms) and focuses the last launched app's tile
+     * (or the first tile); [hideDock] slides it away and returns
+     * focus to the main-area element that opened it. While hidden the
+     * panel is GONE: no focus, no reserved space.
      */
-    private fun restoreDockFocus() {
-        dockRow.post {
-            if (currentFocus != null) return@post
+    private fun showDock() {
+        if (dockOpen || dockRow.childCount == 0) return
+        dockOpen = true
+        focusBeforeDock = currentFocus
+        dockPanel.visibility = View.VISIBLE
+        dockPanel.post {
+            dockPanel.translationY = dockPanel.height.toFloat()
+            dockPanel.animate().translationY(0f).setDuration(200).start()
             val target = dockTiles[Prefs.lastLaunchedPackage(this)]
-                ?: lastFocusedPkg?.let { dockTiles[it] }
                 ?: dockRow.getChildAt(0)
             target?.requestFocus()
         }
+    }
+
+    private fun hideDock(animate: Boolean, restoreFocus: Boolean) {
+        val restore = if (restoreFocus) focusBeforeDock else null
+        focusBeforeDock = null
+        if (!dockOpen) {
+            dockPanel.visibility = View.GONE
+            return
+        }
+        dockOpen = false
+        if (animate && dockPanel.visibility == View.VISIBLE) {
+            dockPanel.animate()
+                .translationY(dockPanel.height.toFloat())
+                .setDuration(200)
+                .withEndAction {
+                    dockPanel.visibility = View.GONE
+                    dockPanel.translationY = 0f
+                }
+                .start()
+        } else {
+            dockPanel.animate().cancel()
+            dockPanel.visibility = View.GONE
+            dockPanel.translationY = 0f
+        }
+        restore?.requestFocus()
+    }
+
+    private fun isFocusInsideDock(): Boolean {
+        var v: View? = currentFocus
+        while (v != null) {
+            if (v == dockPanel) return true
+            v = v.parent as? View
+        }
+        return false
+    }
+
+    /**
+     * v2.1 (point 2) key routing for the hidden dock.
+     *
+     * DOWN trigger: the dock opens ONLY when a downward focus search
+     * from the currently focused main-area element finds nothing —
+     * FocusFinder returns null (or the element itself), meaning focus
+     * is on the bottom-most focusable. Whenever a real view exists
+     * below (card-to-card moves, from the top buttons into the cards),
+     * findNextFocus returns it and the event falls through untouched,
+     * so normal navigation is never stolen. While the quake
+     * AlertDialog is up, key events are delivered to the dialog's own
+     * window and never reach this method, so dialog scrolling is safe
+     * too.
+     *
+     * While the dock is open: UP from any dock tile closes it, BACK
+     * closes it; both return focus to the element that opened it.
+     * LEFT/RIGHT/OK keep their default tile behaviour.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (dockOpen) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_BACK -> {
+                        hideDock(animate = true, restoreFocus = true)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> if (isFocusInsideDock()) {
+                        hideDock(animate = true, restoreFocus = true)
+                        return true
+                    }
+                }
+            } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                val focused = currentFocus
+                if (focused != null) {
+                    val root = focused.rootView as? ViewGroup
+                    val next = root?.let {
+                        FocusFinder.getInstance()
+                            .findNextFocus(it, focused, View.FOCUS_DOWN)
+                    }
+                    if (next == null || next == focused) {
+                        showDock()
+                        return true
+                    }
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     /**
@@ -743,78 +879,111 @@ class MainActivity : LocalizedActivity() {
         }
     }
 
-    /** Fills the forecast strip under the date: today + next 3 days. */
-    private fun buildForecast(days: List<ForecastDay>) {
+    /**
+     * v2.1 (point 3): the forecast is a 2x2 GRID under the date (the
+     * v1.8–v2.0 single-row strip is gone). Chronological order:
+     * left→right, then the next row — [Hari Ini, Kam | Jum, Sab].
+     * Each cell: day name on top, the condition icon DOMINANT at
+     * 44dp, max/min temps below at 15sp.
+     *
+     * Called with null before the first successful fetch (and with a
+     * short list if the API ever returns fewer days): missing cells
+     * render as placeholders — locally computed day name, cloudy
+     * icon, "--°/--°" — so the grid geometry is stable from the very
+     * first frame and never jumps when data lands. Point 12
+     * accessibility is kept: the icon carries the condition name and
+     * each cell's contentDescription reads "{day}, {condition},
+     * {max}° / {min}°" (placeholders read "{day}, {loading}").
+     */
+    private fun buildForecast(days: List<ForecastDay>?) {
         forecastRow.removeAllViews()
         val density = resources.displayMetrics.density
         fun dp(v: Int): Int = (v * density).toInt()
         val dateParser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val dayFmt = SimpleDateFormat("EEE", LocaleHelper.localeFor(this))
-        days.forEachIndexed { index, day ->
-            val chip = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER_HORIZONTAL
-                setBackgroundResource(R.drawable.forecast_chip)
-                setPadding(dp(9), dp(7), dp(9), dp(7))
-                // v1.8: equal-weight chips (0dp width, weight 1) so the
-                // four chips always share the strip's full width in one
-                // horizontal row — the old fixed 74dp width inside a
-                // wrap_content strip let them bunch up beside the date.
-                layoutParams = LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
-                ).apply { if (index < days.size - 1) marginEnd = dp(8) }
-            }
-            val dayLabel = if (index == 0) {
-                getString(R.string.forecast_today)
-            } else {
+
+        fun dayLabel(index: Int, day: ForecastDay?): String {
+            if (index == 0) return getString(R.string.forecast_today)
+            if (day != null) {
                 try {
-                    dateParser.parse(day.date)?.let { dayFmt.format(it) } ?: ""
+                    dateParser.parse(day.date)?.let { return dayFmt.format(it) }
                 } catch (e: Exception) {
-                    ""
+                    // fall through to the locally computed weekday
                 }
             }
-            // Point 12: the condition name for this chip's weather code,
-            // reused from the same mapping as the weather text. The icon
-            // gets it as its contentDescription and the whole chip reads
-            // "{day}, {condition}, {max}° / {min}°" to screen readers —
-            // previously the icon description was null, so only the
-            // temperature text was announced.
-            val condition = weatherText(day.code)
-            chip.contentDescription = String.format(
-                Locale.US, "%s, %s, %d° / %d°",
-                dayLabel, condition, Math.round(day.max), Math.round(day.min)
-            )
-            chip.addView(TextView(this).apply {
-                text = dayLabel
-                textSize = 16f
-                setTextColor(Color.parseColor("#B0BEC5"))
-                gravity = android.view.Gravity.CENTER
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-            })
-            chip.addView(ImageView(this).apply {
-                setImageResource(forecastIconFor(day.code))
-                contentDescription = condition
-                layoutParams = LinearLayout.LayoutParams(dp(26), dp(26))
-                    .apply { topMargin = dp(3) }
-            })
-            chip.addView(TextView(this).apply {
-                text = String.format(
-                    Locale.US, "%d°/%d°",
-                    Math.round(day.max), Math.round(day.min)
-                )
-                textSize = 16f
-                setTextColor(Color.WHITE)
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                gravity = android.view.Gravity.CENTER
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
+            // Placeholder (or unparseable API date): today + index has
+            // the same weekday sequence the API would return.
+            val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, index) }
+            return dayFmt.format(cal.time)
+        }
+
+        for (rowIndex in 0 until 2) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(3) }
-            })
-            forecastRow.addView(chip)
+                ).apply { if (rowIndex == 1) topMargin = dp(8) }
+            }
+            for (colIndex in 0 until 2) {
+                val index = rowIndex * 2 + colIndex
+                val day = days?.getOrNull(index)
+                val label = dayLabel(index, day)
+                val condition = day?.let { weatherText(it.code) } ?: ""
+                val cell = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    setBackgroundResource(R.drawable.forecast_chip)
+                    setPadding(dp(9), dp(8), dp(9), dp(8))
+                    layoutParams = LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                    ).apply { if (colIndex == 0) marginEnd = dp(8) }
+                }
+                cell.contentDescription = if (day != null) {
+                    String.format(
+                        Locale.US, "%s, %s, %d° / %d°",
+                        label, condition, Math.round(day.max), Math.round(day.min)
+                    )
+                } else {
+                    label + ", " + getString(R.string.loading)
+                }
+                cell.addView(TextView(this).apply {
+                    text = label
+                    textSize = 14f
+                    setTextColor(Color.parseColor("#B0BEC5"))
+                    gravity = android.view.Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                })
+                cell.addView(ImageView(this).apply {
+                    setImageResource(forecastIconFor(day?.code ?: 3))
+                    contentDescription = condition.ifBlank { null }
+                    layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+                        .apply { topMargin = dp(4) }
+                })
+                cell.addView(TextView(this).apply {
+                    text = if (day != null) {
+                        String.format(
+                            Locale.US, "%d°/%d°",
+                            Math.round(day.max), Math.round(day.min)
+                        )
+                    } else {
+                        "--°/--°"
+                    }
+                    textSize = 15f
+                    setTextColor(Color.WHITE)
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    gravity = android.view.Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { topMargin = dp(4) }
+                })
+                row.addView(cell)
+            }
+            forecastRow.addView(row)
         }
     }
 

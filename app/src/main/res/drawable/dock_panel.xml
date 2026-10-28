@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dock tray (v2.1, point 2): the dock is hidden by default and
+     slides up as an overlay. The owner explicitly rejected an
+     opaque black panel ("dibuat transparan, jangan hitam"), so the
+     tray uses the same dark-slate family as glass_card but at a
+     lighter alpha (~62% -> ~52%): the wallpaper clearly shows
+     through, while the tiles keep their own dense dock_item
+     background so icons and labels stay readable. Top corners
+     rounded; the bottom edge sits off-screen. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners
+        android:topLeftRadius="18dp"
+        android:topRightRadius="18dp"
+        android:bottomLeftRadius="0dp"
+        android:bottomRightRadius="0dp" />
+    <gradient
+        android:angle="270"
+        android:endColor="#850B1219"
+        android:startColor="#9E141C26"
+        android:type="linear" />
+    <stroke
+        android:width="1dp"
+        android:color="#59FFFFFF" />
+</shape>

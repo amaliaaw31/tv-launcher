@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.1 (point 1): card-title icon — cloud outline for the weather
+     title. Same line style as ic_input: 24-unit viewport, white
+     strokes, strokeWidth 2, round caps/joins. Decorative only; the
+     ImageView carries contentDescription=@null. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M6.5,19a4.25,4.25 0 0,1 -0.35,-8.48 6,6 0 0,1 11.55,1.15A4,4 0 0,1 17.5,19z"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

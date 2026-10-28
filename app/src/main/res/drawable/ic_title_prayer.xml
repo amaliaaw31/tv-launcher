@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.1 (point 1): card-title icon — crescent moon + small star for
+     the prayer-times title. Same line style as ic_input /
+     ic_title_weather (star is a small filled accent). Decorative
+     only (contentDescription=@null on the ImageView). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M20,14.5A8.5,8.5 0 1,1 9.5,4a7,7 0 0,0 10.5,10.5z"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M17.5,2.5l0.65,1.85 1.85,0.65 -1.85,0.65 -0.65,1.85 -0.65,-1.85 -1.85,-0.65 1.85,-0.65z" />
+</vector>

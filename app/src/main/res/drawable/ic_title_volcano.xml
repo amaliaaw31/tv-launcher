@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.1 (point 1): card-title icon — volcano with crater notch and
+     three short eruption strokes, for the volcano (VONA) title.
+     Same line style as ic_input / ic_title_weather. Decorative
+     only (contentDescription=@null on the ImageView). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M4,20.5l5.5,-10.5h5L20,20.5z M9.5,10l1.6,2.4h1.8L14.5,10 M12,3v2.2 M8.6,4.2l1.1,1.8 M15.4,4.2l-1.1,1.8"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
