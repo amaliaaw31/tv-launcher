@@ -65,8 +65,16 @@
     <string name="connect_phone_hint">Show QR code</string>
     <!-- v1.9: quake summary + detail page, per-source data states -->
     <string name="quake_summary">M %1$s — %2$s</string>
-    <string name="quake_summary_sub">%1$s • %2$s • Depth %3$s</string>
+    <!-- v2.2 (point 5): date + time only — depth lives in the detail dialog. -->
+    <string name="quake_summary_sub">%1$s • %2$s</string>
     <string name="quake_detail_hint">Press OK for details ›</string>
+    <!-- v2.2 (points 3+4): weather/prayer detail dialogs -->
+    <string name="weather_temp_label">Temperature</string>
+    <string name="weather_city_label">City</string>
+    <string name="aqi_label">Air Quality (US AQI)</string>
+    <string name="pm25_label">PM2.5</string>
+    <string name="prayer_detail_hint">Press OK for full schedule ›</string>
+    <string name="prayer_next_tag">Next</string>
     <string name="status_updated">Updated %1$s</string>
     <string name="status_failed_last">Load failed — last data • %1$s</string>
     <string name="status_failed">Load failed</string>

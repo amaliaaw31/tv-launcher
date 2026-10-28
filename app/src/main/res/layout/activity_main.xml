@@ -90,13 +90,30 @@
                      2x2 GRID (v2.1, point 3): two rows of two cells
                      built in code into this vertical container.
                      (v1.8-v2.0 was a single horizontal strip of four
-                     weighted chips.) -->
+                     weighted chips.)
+                     v2.2 (point 1): the grid is narrowed to 78% of
+                     the left column's content width (within the
+                     75-80% band), left-aligned with the date text
+                     above it — the weighted spacer absorbs the rest,
+                     so the cells get closer to square. -->
                 <LinearLayout
-                    android:id="@+id/forecastRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
-                    android:orientation="vertical" />
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:id="@+id/forecastRow"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="78"
+                        android:orientation="vertical" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_weight="22" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- right: compact widget cards.
@@ -130,11 +147,12 @@
                 android:paddingTop="68dp"
                 android:paddingBottom="10dp">
 
-                <!-- weather card: title, main line, city, ONE AQI
-                     line, status line. Height wraps content like every
-                     card (v2.0 point 1) — no fixed/min height anywhere
-                     in this column. Focusable: OK refetches weather +
-                     air only. -->
+                <!-- weather card (v2.2, point 3): SUMMARIZED face —
+                     title, main line (temp + condition), city, OK
+                     hint, status line. The AQI/PM2.5 line moved into
+                     the weather detail dialog (OK opens it). Height
+                     wraps content like every card (v2.0 point 1) — no
+                     fixed/min height anywhere in this column. -->
                 <LinearLayout
                     android:id="@+id/weatherCard"
                     android:layout_width="match_parent"
@@ -188,31 +206,19 @@
                         android:textColor="#ECEFF1"
                         android:textSize="16sp" />
 
-                    <!-- v2.1 (point 1): the air-quality row gets the
-                         wind icon — it is the air-quality info row of
-                         this card. Decorative; the AQI text remains
-                         the label. -->
-                    <LinearLayout
+                    <!-- v2.2 (point 3): the AQI row left the card
+                         face; it lives in the weather detail dialog
+                         now (with its wind icon's info as text). The
+                         hint line takes its place, same style as the
+                         quake card's. -->
+                    <TextView
+                        android:id="@+id/weatherHint"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:layout_width="19dp"
-                            android:layout_height="19dp"
-                            android:layout_marginEnd="6dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_title_air" />
-
-                        <TextView
-                            android:id="@+id/weatherAqi"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textColor="#FFD54F"
-                            android:textSize="16sp" />
-                    </LinearLayout>
+                        android:text="@string/quake_detail_hint"
+                        android:textColor="#22D3EE"
+                        android:textSize="16sp" />
 
                     <TextView
                         android:id="@+id/weatherStatus"
@@ -224,8 +230,10 @@
                         android:textSize="16sp" />
                 </LinearLayout>
 
-                <!-- prayer card (v1.9): next-prayer line + one all-times
-                     line + status line. Focusable: OK refetches prayer. -->
+                <!-- prayer card (v2.2, point 4): SUMMARIZED face —
+                     title, next-prayer line only, OK hint, status
+                     line. The full day schedule moved into a dialog
+                     (OK opens it). -->
                 <LinearLayout
                     android:id="@+id/prayerCard"
                     android:layout_width="match_parent"
@@ -270,11 +278,12 @@
                         android:textStyle="bold" />
 
                     <TextView
-                        android:id="@+id/prayerAll"
-                        android:layout_width="match_parent"
+                        android:id="@+id/prayerHint"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:maxLines="2"
-                        android:textColor="#ECEFF1"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/prayer_detail_hint"
+                        android:textColor="#22D3EE"
                         android:textSize="16sp" />
 
                     <TextView

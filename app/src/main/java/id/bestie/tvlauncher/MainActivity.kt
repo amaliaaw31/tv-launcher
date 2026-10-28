@@ -44,10 +44,8 @@ class MainActivity : LocalizedActivity() {
     private lateinit var dateText: TextView
     private lateinit var weatherMain: TextView
     private lateinit var weatherCity: TextView
-    private lateinit var weatherAqi: TextView
     private lateinit var weatherStatus: TextView
     private lateinit var prayerNext: TextView
-    private lateinit var prayerAll: TextView
     private lateinit var prayerStatus: TextView
     private lateinit var quakeMain: TextView
     private lateinit var quakeSub: TextView
@@ -92,6 +90,11 @@ class MainActivity : LocalizedActivity() {
 
     /** Today's prayer entries (name -> "HH:mm"), for the countdown tick (point 6). */
     private var prayerEntriesMem: List<Pair<String, String>> = emptyList()
+
+    // v2.2 (point 3): last air-quality values, kept for the weather
+    // detail dialog now that the AQI line left the card face.
+    private var lastAqi: Int? = null
+    private var lastPm25: Double? = null
 
     // Dock: signature of the resolved package list (point 8) and tiles by
     // package, for focus restore.
@@ -186,10 +189,8 @@ class MainActivity : LocalizedActivity() {
         dateText = findViewById(R.id.dateText)
         weatherMain = findViewById(R.id.weatherMain)
         weatherCity = findViewById(R.id.weatherCity)
-        weatherAqi = findViewById(R.id.weatherAqi)
         weatherStatus = findViewById(R.id.weatherStatus)
         prayerNext = findViewById(R.id.prayerNext)
-        prayerAll = findViewById(R.id.prayerAll)
         prayerStatus = findViewById(R.id.prayerStatus)
         quakeMain = findViewById(R.id.quakeMain)
         quakeSub = findViewById(R.id.quakeSub)
@@ -221,17 +222,30 @@ class MainActivity : LocalizedActivity() {
         }
         gearBtn.setColorFilter(Color.WHITE)
 
-        // Card actions (point 4): OK refetches ONLY that card's source;
-        // OK on the quake card opens the native detail dialog (point 2).
-        // Focus swaps the card background to the teal-bordered variant.
+        // Card actions: OK on the quake card opens the native detail
+        // dialog (point 2). v2.2 (points 3+4): OK on the weather /
+        // prayer cards opens their detail dialogs too (AQI detail /
+        // full schedule); with no data yet, OK falls back to the old
+        // per-source refetch so the card still works as a retry.
+        // Volcano OK refetches volcano only. Focus swaps the card
+        // background to the teal-bordered variant.
         weatherCard.setOnClickListener {
-            val city = Prefs.city(this)
-            executor.execute { fetchWeather(city) }
-            executor.execute { fetchAir(city) }
+            if (weatherOkMs == 0L && airOkMs == 0L) {
+                val city = Prefs.city(this)
+                executor.execute { fetchWeather(city) }
+                executor.execute { fetchAir(city) }
+            } else {
+                showWeatherDetailDialog()
+            }
         }
         prayerCard.setOnClickListener {
-            val city = Prefs.city(this)
-            executor.execute { fetchPrayer(city) }
+            val entries = prayerEntriesMem.ifEmpty { Prefs.prayerEntries(this) }
+            if (entries.isEmpty()) {
+                val city = Prefs.city(this)
+                executor.execute { fetchPrayer(city) }
+            } else {
+                showPrayerScheduleDialog()
+            }
         }
         quakeCard.setOnClickListener {
             showQuakeDetailDialog()
@@ -866,13 +880,11 @@ class MainActivity : LocalizedActivity() {
         if (aqiFinal != null) {
             airState = LoadState.OK
             airOkMs = System.currentTimeMillis()
-            uiHandler.post {
-                weatherAqi.text = getString(
-                    R.string.air_quality, aqiFinal,
-                    pmFinal?.let { String.format(Locale.US, "%.0f", it) } ?: "-"
-                )
-                renderWeatherStatus()
-            }
+            // v2.2 (point 3): values are stored for the weather detail
+            // dialog; the card face no longer shows an AQI line.
+            lastAqi = aqiFinal
+            lastPm25 = pmFinal
+            uiHandler.post { renderWeatherStatus() }
         } else {
             airState = LoadState.ERROR
             uiHandler.post { renderWeatherStatus() }
@@ -883,8 +895,15 @@ class MainActivity : LocalizedActivity() {
      * v2.1 (point 3): the forecast is a 2x2 GRID under the date (the
      * v1.8–v2.0 single-row strip is gone). Chronological order:
      * left→right, then the next row — [Hari Ini, Kam | Jum, Sab].
-     * Each cell: day name on top, the condition icon DOMINANT at
-     * 44dp, max/min temps below at 15sp.
+     * Each cell: day name on top, the condition icon DOMINANT,
+     * max/min temps below at 15sp.
+     *
+     * v2.2 (point 1): the grid container is narrowed to 78% of the
+     * left column (see activity_main.xml) and the icon grows
+     * 44dp -> 56dp with taller cell padding (12dp vertical), so
+     * cells land closer to square (≈209dp wide × ≈125dp tall at the
+     * 960dp-wide TV layout) and the icon is unmistakably the focal
+     * point.
      *
      * Called with null before the first successful fetch (and with a
      * short list if the API ever returns fewer days): missing cells
@@ -934,7 +953,7 @@ class MainActivity : LocalizedActivity() {
                     orientation = LinearLayout.VERTICAL
                     gravity = android.view.Gravity.CENTER_HORIZONTAL
                     setBackgroundResource(R.drawable.forecast_chip)
-                    setPadding(dp(9), dp(8), dp(9), dp(8))
+                    setPadding(dp(9), dp(12), dp(9), dp(12))
                     layoutParams = LinearLayout.LayoutParams(
                         0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
                     ).apply { if (colIndex == 0) marginEnd = dp(8) }
@@ -958,7 +977,7 @@ class MainActivity : LocalizedActivity() {
                 cell.addView(ImageView(this).apply {
                     setImageResource(forecastIconFor(day?.code ?: 3))
                     contentDescription = condition.ifBlank { null }
-                    layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+                    layoutParams = LinearLayout.LayoutParams(dp(56), dp(56))
                         .apply { topMargin = dp(4) }
                 })
                 cell.addView(TextView(this).apply {
@@ -1182,17 +1201,12 @@ class MainActivity : LocalizedActivity() {
     }
 
     /**
-     * Recomputes "next prayer + remaining" from the stored entries using
-     * the city timezone (points 6 + 13). UI thread only. When every time
-     * today has passed, the first entry is next (tomorrow) — the diff
-     * wraps by +24 h as before.
+     * Index of the next prayer in [entries] + minutes until it, in the
+     * city timezone (points 6 + 13). When every time today has passed,
+     * the first entry is next (tomorrow) — the diff wraps by +24 h.
+     * Shared by the countdown tick and the v2.2 full-schedule dialog.
      */
-    private fun updatePrayerCountdown() {
-        if (prayerEntriesMem.isEmpty()) {
-            prayerEntriesMem = Prefs.prayerEntries(this)
-        }
-        val entries = prayerEntriesMem
-        if (entries.isEmpty()) return
+    private fun nextPrayer(entries: List<Pair<String, String>>): Pair<Int, Int> {
         val tz = cityTimeZone()
         val nowCal = Calendar.getInstance(tz)
         val nowMin = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE)
@@ -1200,32 +1214,56 @@ class MainActivity : LocalizedActivity() {
             val p = hhmm.split(":")
             return (p.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (p.getOrNull(1)?.toIntOrNull() ?: 0)
         }
-        var nextName = entries[0].first
-        var nextTime = entries[0].second
+        var nextIdx = 0
         var diff = toMin(entries[0].second) + 24 * 60 - nowMin
-        for ((name, time) in entries) {
-            val d = toMin(time) - nowMin
+        for (i in entries.indices) {
+            val d = toMin(entries[i].second) - nowMin
             if (d >= 0 && d < diff) {
                 diff = d
-                nextName = name
-                nextTime = time
+                nextIdx = i
             }
         }
         if (diff > 24 * 60) diff -= 24 * 60
+        return nextIdx to diff
+    }
+
+    /**
+     * Recomputes "next prayer + remaining" from the stored entries using
+     * the city timezone (points 6 + 13). UI thread only.
+     */
+    private fun updatePrayerCountdown() {
+        if (prayerEntriesMem.isEmpty()) {
+            prayerEntriesMem = Prefs.prayerEntries(this)
+        }
+        val entries = prayerEntriesMem
+        if (entries.isEmpty()) return
+        val (nextIdx, diff) = nextPrayer(entries)
         val en = Prefs.isEnglish(this)
         val remaining = if (en) "${diff / 60} h ${diff % 60} m" else "${diff / 60} j ${diff % 60} m"
         // v2.0 (point 2): short next-prayer format ("Dzuhur 11:36 •
         // 5 j 14 m") so the bold line renders on ONE line — the v1.9
         // "Berikutnya: … • … lagi" wrapped and stranded "lagi".
-        prayerNext.text = getString(R.string.next_prayer, nextName, nextTime, remaining)
-        // All-times on TWO clear lines (Subuh • Dzuhur / Ashar •
-        // Maghrib • Isya) — no ellipsis truncation of any time.
-        prayerAll.text = if (entries.size >= 5) {
-            entries.take(2).joinToString(" • ") { "${it.first} ${it.second}" } +
-                "\n" + entries.drop(2).joinToString(" • ") { "${it.first} ${it.second}" }
-        } else {
-            entries.joinToString(" • ") { "${it.first} ${it.second}" }
-        }
+        // v2.2 (point 4): this is now the card's ONLY prayer line —
+        // the full schedule lives in the dialog below.
+        prayerNext.text = getString(
+            R.string.next_prayer, entries[nextIdx].first, entries[nextIdx].second, remaining
+        )
+    }
+
+    /**
+     * v2.2 (point 4): the FULL day schedule in the same native dialog
+     * pattern as the quake detail; the next prayer is marked. Back or
+     * Tutup dismisses; focus returns to the prayer card.
+     */
+    private fun showPrayerScheduleDialog() {
+        val entries = prayerEntriesMem.ifEmpty { Prefs.prayerEntries(this) }
+        if (entries.isEmpty()) return
+        val (nextIdx, _) = nextPrayer(entries)
+        val body = entries.mapIndexed { i, (name, time) ->
+            val line = "$name $time"
+            if (i == nextIdx) line + " • " + getString(R.string.prayer_next_tag) else line
+        }.joinToString("\n")
+        showDetailDialog(R.string.prayer_title, body, prayerCard)
     }
 
     // ---------------------------------------------------------------- quake
@@ -1268,9 +1306,11 @@ class MainActivity : LocalizedActivity() {
             R.string.quake_summary,
             OverlayPopup.formatMag(Prefs.quakeMag(this)), shortWilayah(Prefs.quakeRegion(this))
         )
+        // v2.2 (point 5): second line is date + time ONLY — depth no
+        // longer truncates it; depth stays in the detail dialog.
         quakeSub.text = getString(
             R.string.quake_summary_sub,
-            Prefs.quakeTanggal(this), Prefs.quakeJam(this), Prefs.quakeDepth(this)
+            Prefs.quakeTanggal(this), Prefs.quakeJam(this)
         )
     }
 
@@ -1305,10 +1345,62 @@ class MainActivity : LocalizedActivity() {
     }
 
     /**
+     * The one native detail-dialog pattern (v2.0, point 2): a
+     * ScrollView + 18sp TextView body, "Tutup" button; D-pad scrolls
+     * the body; Back or Tutup dismisses and focus returns to [anchor]
+     * (the card that opened it). Used by the quake, weather (v2.2
+     * point 3) and prayer-schedule (v2.2 point 4) dialogs.
+     */
+    private fun showDetailDialog(titleRes: Int, body: String, anchor: View) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val textView = TextView(this).apply {
+            text = body
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            setPadding(pad, pad / 2, pad, pad / 2)
+            isFocusable = true
+        }
+        val scroll = ScrollView(this).apply {
+            addView(textView)
+            isFocusable = true
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(titleRes)
+            .setView(scroll)
+            .setPositiveButton(R.string.close, null)
+            .create()
+        dialog.setOnDismissListener { anchor.requestFocus() }
+        dialog.setOnShowListener { scroll.requestFocus() }
+        dialog.show()
+    }
+
+    /**
+     * v2.2 (point 3): complete weather + air detail. The card face now
+     * shows only temp + condition + city; the AQI (US) and PM2.5 lines
+     * that used to sit on the card live here, with everything the card
+     * shows and the updated time.
+     */
+    private fun showWeatherDetailDialog() {
+        fun field(labelRes: Int, value: String): String =
+            getString(labelRes) + ": " + value.ifBlank { "—" }
+        val pmText = lastPm25?.let {
+            String.format(Locale.US, "%.0f", it) + " µg/m³"
+        } ?: ""
+        val body = listOf(
+            field(R.string.weather_temp_label, weatherMain.text.toString()),
+            field(R.string.weather_city_label, Prefs.city(this).name),
+            field(R.string.aqi_label, lastAqi?.toString() ?: ""),
+            field(R.string.pm25_label, pmText),
+            getString(R.string.status_updated, hhmm(maxOf(weatherOkMs, airOkMs)))
+        ).joinToString("\n")
+        showDetailDialog(R.string.weather_title, body, weatherCard)
+    }
+
+    /**
      * v2.0 (point 2): complete quake detail in a native AlertDialog
-     * (replaces the v1.9 QuakeDetailActivity). Body = ScrollView +
-     * TextView with the COMPLETE unabridged record; D-pad scrolls it;
-     * Back or Tutup dismisses and focus returns to the quake card.
+     * (replaces the v1.9 QuakeDetailActivity). Body = the COMPLETE
+     * unabridged record — including depth (v2.2 point 5: depth left
+     * the card face but stays here).
      */
     private fun showQuakeDetailDialog() {
         if (Prefs.quakeUpdatedAt(this) == 0L) return
@@ -1328,26 +1420,7 @@ class MainActivity : LocalizedActivity() {
             field(R.string.quake_tsunami_label, Prefs.quakePotensi(this)),
             getString(R.string.quake_source, hhmm(Prefs.quakeUpdatedAt(this)))
         ).joinToString("\n")
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val textView = TextView(this).apply {
-            text = body
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            setPadding(pad, pad / 2, pad, pad / 2)
-            isFocusable = true
-        }
-        val scroll = ScrollView(this).apply {
-            addView(textView)
-            isFocusable = true
-        }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.quake_detail_title)
-            .setView(scroll)
-            .setPositiveButton(R.string.close, null)
-            .create()
-        dialog.setOnDismissListener { quakeCard.requestFocus() }
-        dialog.setOnShowListener { scroll.requestFocus() }
-        dialog.show()
+        showDetailDialog(R.string.quake_detail_title, body, quakeCard)
     }
 
     // -------------------------------------------------------------- volcano

@@ -65,8 +65,16 @@
     <string name="connect_phone_hint">Tampilkan kode QR</string>
     <!-- v1.9: quake summary + detail page, per-source data states -->
     <string name="quake_summary">M %1$s — %2$s</string>
-    <string name="quake_summary_sub">%1$s • %2$s • Kedalaman %3$s</string>
+    <!-- v2.2 (point 5): date + time only — depth lives in the detail dialog. -->
+    <string name="quake_summary_sub">%1$s • %2$s</string>
     <string name="quake_detail_hint">Tekan OK untuk detail ›</string>
+    <!-- v2.2 (points 3+4): weather/prayer detail dialogs -->
+    <string name="weather_temp_label">Suhu</string>
+    <string name="weather_city_label">Kota</string>
+    <string name="aqi_label">Kualitas Udara (AQI US)</string>
+    <string name="pm25_label">PM2.5</string>
+    <string name="prayer_detail_hint">Tekan OK untuk jadwal lengkap ›</string>
+    <string name="prayer_next_tag">Berikutnya</string>
     <string name="status_updated">Diperbarui %1$s</string>
     <string name="status_failed_last">Gagal memuat — data terakhir • %1$s</string>
     <string name="status_failed">Gagal memuat</string>
