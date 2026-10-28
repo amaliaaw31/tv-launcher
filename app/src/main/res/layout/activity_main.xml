@@ -51,6 +51,9 @@
                 android:paddingStart="44dp"
                 android:paddingEnd="12dp">
 
+                <!-- v2.4 (change 1): greeting 16sp -> 21sp (~1.3x),
+                     still only ~19% of the 112sp clock — the owner's
+                     hard cap: never approach the clock size. -->
                 <TextView
                     android:id="@+id/greetingText"
                     android:layout_width="wrap_content"
@@ -60,7 +63,7 @@
                     android:shadowDy="2"
                     android:shadowRadius="6"
                     android:textColor="#FFFFFF"
-                    android:textSize="16sp" />
+                    android:textSize="21sp" />
 
                 <TextView
                     android:id="@+id/clockText"
@@ -95,7 +98,12 @@
                      the left column's content width (within the
                      75-80% band), left-aligned with the date text
                      above it — the weighted spacer absorbs the rest,
-                     so the cells get closer to square. -->
+                     so the cells get closer to square.
+                     v2.4 (change 2): narrowed further to 54% of the
+                     content width (≈295dp of the ≈547dp content
+                     width at the 960dp TV layout, ≈55% of the left
+                     column) for the wide-short tile restyle; still
+                     left-aligned with the date text above it. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -106,13 +114,13 @@
                         android:id="@+id/forecastRow"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_weight="78"
+                        android:layout_weight="54"
                         android:orientation="vertical" />
 
                     <View
                         android:layout_width="0dp"
                         android:layout_height="0dp"
-                        android:layout_weight="22" />
+                        android:layout_weight="46" />
                 </LinearLayout>
             </LinearLayout>
 

@@ -937,8 +937,9 @@ class MainActivity : LocalizedActivity() {
      * v2.1 (point 3): the forecast is a 2x2 GRID under the date (the
      * v1.8–v2.0 single-row strip is gone). Chronological order:
      * left→right, then the next row — [Hari Ini, Kam | Jum, Sab].
-     * Each cell: day name on top, the condition icon DOMINANT,
-     * max/min temps below at 15sp.
+     * (The original cell layout — day name on top, dominant icon,
+     * temps below — was superseded by the v2.4 wide-tile restyle
+     * described below.)
      *
      * v2.2 (point 1): the grid container is narrowed to 78% of the
      * left column (see activity_main.xml) and the icon grows
@@ -947,14 +948,23 @@ class MainActivity : LocalizedActivity() {
      * 960dp-wide TV layout) and the icon is unmistakably the focal
      * point.
      *
+     * v2.4 (change 2): restyled to the owner's approved example —
+     * WIDE SHORT tiles in a horizontal layout. The container is
+     * narrowed to 54% of the left column content width (≈295dp,
+     * see activity_main.xml), so each tile is ≈144x57dp: the
+     * condition icon (28dp) sits on the LEFT and two stacked lines
+     * sit on its right — line 1 the day name (bold, 15sp), line 2
+     * "{max}°/{min}° • {condition}" (14sp). Tile height is fixed at
+     * 57dp so placeholders and loaded cells share one geometry.
+     *
      * Called with null before the first successful fetch (and with a
      * short list if the API ever returns fewer days): missing cells
      * render as placeholders — locally computed day name, cloudy
      * icon, "--°/--°" — so the grid geometry is stable from the very
      * first frame and never jumps when data lands. Point 12
      * accessibility is kept: the icon carries the condition name and
-     * each cell's contentDescription reads "{day}, {condition},
-     * {max}° / {min}°" (placeholders read "{day}, {loading}").
+     * each cell's contentDescription reads "{day}, {max}° / {min}°,
+     * {condition}" (placeholders read "{day}, {loading}").
      */
     private fun buildForecast(days: List<ForecastDay>?) {
         forecastRow.removeAllViews()
@@ -991,57 +1001,61 @@ class MainActivity : LocalizedActivity() {
                 val day = days?.getOrNull(index)
                 val label = dayLabel(index, day)
                 val condition = day?.let { weatherText(it.code) } ?: ""
+                // v2.4 (change 2): wide short tile — icon LEFT,
+                // two stacked lines on its right. Fixed 57dp height
+                // keeps placeholder and loaded geometry identical.
                 val cell = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
                     setBackgroundResource(R.drawable.forecast_chip)
-                    setPadding(dp(9), dp(12), dp(9), dp(12))
+                    setPadding(dp(10), dp(8), dp(10), dp(8))
                     layoutParams = LinearLayout.LayoutParams(
-                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                        0, dp(57), 1f
                     ).apply { if (colIndex == 0) marginEnd = dp(8) }
                 }
                 cell.contentDescription = if (day != null) {
                     String.format(
-                        Locale.US, "%s, %s, %d° / %d°",
-                        label, condition, Math.round(day.max), Math.round(day.min)
+                        Locale.US, "%s, %d° / %d°, %s",
+                        label, Math.round(day.max), Math.round(day.min), condition
                     )
                 } else {
                     label + ", " + getString(R.string.loading)
                 }
-                cell.addView(TextView(this).apply {
-                    text = label
-                    textSize = 14f
-                    setTextColor(Color.parseColor("#B0BEC5"))
-                    gravity = android.view.Gravity.CENTER
-                    maxLines = 1
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                })
                 cell.addView(ImageView(this).apply {
                     setImageResource(forecastIconFor(day?.code ?: 3))
                     contentDescription = condition.ifBlank { null }
-                    layoutParams = LinearLayout.LayoutParams(dp(56), dp(56))
-                        .apply { topMargin = dp(4) }
+                    layoutParams = LinearLayout.LayoutParams(dp(28), dp(28))
+                        .apply { marginEnd = dp(8) }
                 })
-                cell.addView(TextView(this).apply {
+                val lines = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                    )
+                }
+                lines.addView(TextView(this).apply {
+                    text = label
+                    textSize = 15f
+                    setTextColor(Color.WHITE)
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                })
+                lines.addView(TextView(this).apply {
                     text = if (day != null) {
                         String.format(
-                            Locale.US, "%d°/%d°",
-                            Math.round(day.max), Math.round(day.min)
+                            Locale.US, "%d°/%d° • %s",
+                            Math.round(day.max), Math.round(day.min), condition
                         )
                     } else {
                         "--°/--°"
                     }
-                    textSize = 15f
-                    setTextColor(Color.WHITE)
-                    setTypeface(typeface, android.graphics.Typeface.BOLD)
-                    gravity = android.view.Gravity.CENTER
+                    textSize = 14f
+                    setTextColor(Color.parseColor("#ECEFF1"))
                     maxLines = 1
                     ellipsize = android.text.TextUtils.TruncateAt.END
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply { topMargin = dp(4) }
                 })
+                cell.addView(lines)
                 row.addView(cell)
             }
             forecastRow.addView(row)

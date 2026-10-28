@@ -288,3 +288,6 @@ Grid forecast 78 persen lebar area kiri, rata kiri dengan tanggal, ikon cuaca 44
 
 ## Update v2.3 (28 Okt 2026)
 Perilaku dock: sembunyi otomatis saat fokus pindah ke widget (OnGlobalFocusChangeListener, tanpa menarik fokus balik); sembunyi saat tile diluncurkan (sebelum startActivity); ATAS/BACK tetap menutup + fokus kembali (jalur dispatchKeyEvent tidak diubah); anti-resurreksi animasi - runnable post di showDock memeriksa dockOpen, withEndAction hide dibungkus if(!dockOpen), animate().cancel() di kedua arah. SIGNER BERBEDA lagi (620385cc vs v2.2 95324eda) - uninstall + install segar lagi.
+
+## Update v2.4 (28 Okt 2026)
+Tiga perubahan kecil terkunci: sapaan 16->21sp (jam tetap 112sp, rasio 0,19 - jauh di bawah jam); forecast dibentuk ulang persis contoh SS: tile lebar-pendek 144x57dp, ikon 28dp di kiri, nama hari tebal 15sp + baris maks/min-kondisi 14sp, lebar grid 54 persen area kiri (295dp); tanpa panel kiri (terverifikasi kolom kiri tanpa background, hanya scrim jam v2.0). Kartu kanan/dialog/dock v2.3 tidak berubah. SIGNER BERBEDA lagi (94521112 vs v2.3 620385cc) - uninstall + install segar.
